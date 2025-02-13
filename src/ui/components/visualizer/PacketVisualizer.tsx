@@ -6,13 +6,14 @@ import { MutableRefObject, useEffect, useRef, useState } from "react";
 import { Item, ItemParams, Menu, Separator } from "react-contexify";
 import { FaFileImport } from "react-icons/fa";
 import {
+    IoIosRepeat,
     IoMdArrowDown,
+    IoMdBook,
     IoMdClose,
     IoMdCloudUpload,
-    IoMdSave,
-    IoMdPlay,
     IoMdPause,
-    IoMdBook
+    IoMdPlay,
+    IoMdSave
 } from "react-icons/io";
 import AutoSizer from "react-virtualized-auto-sizer";
 import { FixedSizeList } from "react-window";
@@ -106,7 +107,7 @@ function packetFilter({
                 (filters.length != undefined
                     ? length >= filters.length
                     : true));
-    } catch { }
+    } catch {}
 
     return orand ? filterResult && jsonResult : filterResult || jsonResult;
 }
@@ -299,7 +300,6 @@ function PacketVisualizer(props: IProps) {
 
     const [lockScroll, setLockScroll] = useState<boolean>(false);
     const [searchBoth, setSearchBoth] = useState<boolean>(true);
-    const [showPublish, setShowPublish] = useState<boolean>(false);
     const [capturingPcap, setCapturingPcap] = useState<boolean>(false);
 
     const [filteredPackets, setFilteredPackets] = useState<PacketType[]>([]);
@@ -336,20 +336,91 @@ function PacketVisualizer(props: IProps) {
     /// </editor-fold>
 
     let root = new protobuf.Root();
-    const cmdIdToMessageMap: { [cmdId: number]: string } = {};
+    const [cmdIdToMessageMap, setCmdIdToMessageMap] = useState<{
+        [cmdId: number]: string;
+    }>({});
+    const [messageSort, setMessageSort] = useState<{ [key: string]: number }>(
+        {}
+    );
+
+    const rebuildFromProto = (protoText: string): void => {
+        try {
+            // Parse the proto file content using protobufjs
+            const parsed = protobuf.parse(protoText);
+            root = parsed.root;
+        } catch (error) {
+            console.error("Error parsing proto file:", error);
+            const statusElement = document.getElementById("status");
+            if (statusElement)
+                statusElement.innerText = "Error parsing proto file.";
+            return;
+        }
+
+        // Clear the current map before rebuilding
+        Object.keys(cmdIdToMessageMap).forEach(
+            (key) => delete cmdIdToMessageMap[Number(key)]
+        );
+
+        // Regex to extract CmdId and message names
+        let pendingCmdId: number | null = null;
+        const cmdIdRegex = /^\/\/\s*CmdId:\s*(\d+)/;
+        const messageRegex = /^message\s+(\w+)/;
+        const lines = protoText.split(/\r?\n/);
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            const cmdMatch = trimmedLine.match(cmdIdRegex);
+            if (cmdMatch) {
+                pendingCmdId = Number(cmdMatch[1]);
+                continue;
+            }
+            const msgMatch = trimmedLine.match(messageRegex);
+            if (msgMatch && pendingCmdId !== null) {
+                const messageName = msgMatch[1];
+                cmdIdToMessageMap[pendingCmdId] = messageName;
+                pendingCmdId = null;
+            }
+        }
+
+        console.log(
+            `Proto processed with ${Object.keys(cmdIdToMessageMap).length} cmdId mappings.`
+        );
+    };
+
+    /**
+     * Loads a saved proto file from localStorage and rebuilds the proto.
+     */
+    const loadSavedProto = (): void => {
+        const savedProto = localStorage.getItem("protoFileContent");
+        if (savedProto) {
+            console.log("Found saved proto file. Rebuilding proto...");
+            rebuildFromProto(savedProto);
+        } else {
+            console.log("No saved proto file found.");
+        }
+    };
 
     const listenPcapEventStream = () => {
+        loadSavedProto();
         const ev = new EventSource("http://localhost:1985/api/stream");
         ev.addEventListener("packetNotify", (e) => {
             const packet = JSON.parse(e.data) as PacketType;
             if (packet.data == "") {
                 const Name = cmdIdToMessageMap[packet.packetId];
                 packet.packetName = Name;
+
+                messageSort[Name] = (messageSort[Name] || 0) + 1;
+
                 if (packet.binary) {
                     try {
-                        const buffer: Buffer = Buffer.from(packet.binary, "base64");
+                        const buffer: Buffer = Buffer.from(
+                            packet.binary,
+                            "base64"
+                        );
                         const Message = root.lookupType(Name);
-                        packet.data = JSON.stringify(Message.decode(buffer).toJSON());
+                        packet.data = JSON.stringify(
+                            Message.decode(buffer).toJSON()
+                        );
                     } catch (error) {
                         console.error("Error decoding proto?", error);
                     }
@@ -357,9 +428,13 @@ function PacketVisualizer(props: IProps) {
                     packet.data = JSON.stringify({});
                 }
             }
-            push(packet)
-        })
-    }
+            push(packet);
+        });
+    };
+    const onClickMessageSort = () => {
+        console.log(`cmdIdToMessageMap: `, cmdIdToMessageMap);
+        console.log(`messageSort: `, messageSort);
+    };
     const onClickUploadPcap = () => {
         const input = document.createElement("input");
         input.hidden = true;
@@ -371,10 +446,10 @@ function PacketVisualizer(props: IProps) {
             formData.append("file", e.target!.files[0]);
             await fetch("http://localhost:1985/api/upload", {
                 method: "POST",
-                body: formData,
+                body: formData
             });
         });
-    }
+    };
     const onClickUploadProto = () => {
         const input = document.createElement("input");
         input.hidden = true;
@@ -388,52 +463,33 @@ function PacketVisualizer(props: IProps) {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const protoText = event.target?.result as string;
-                root = protobuf.parse(protoText).root;
 
-                // Build cmdId to message map
-                let pendingCmdId: number | null = null;
-                const cmdIdRegex = /^\/\/\s*CmdId:\s*(\d+)/;
-                const messageRegex = /^message\s+(\w+)/;
-                const lines = protoText.split(/\r?\n/);
-                for (const line of lines) {
-                    const trimmedLine = line.trim();
-                    const cmdMatch = trimmedLine.match(cmdIdRegex);
-                    if (cmdMatch) {
-                        pendingCmdId = Number(cmdMatch[1]);
-                        continue;
-                    }
-                    const msgMatch = trimmedLine.match(messageRegex);
-                    if (msgMatch && pendingCmdId !== null) {
-                        const messageName = msgMatch[1];
-                        cmdIdToMessageMap[pendingCmdId] = messageName;
-                        pendingCmdId = null;
-                    }
-                }
-                console.log(`Proto file uploaded with cmdId ${Object.keys(cmdIdToMessageMap).length}`);
-
+                // Save the proto content and file name in localStorage
+                localStorage.setItem("protoFileContent", protoText);
+                rebuildFromProto(protoText);
             };
             reader.readAsText(file);
         });
-    }
+    };
     const stopPcap = async () => {
-        const res = await fetch("http://localhost:1985/api/stop")
+        const res = await fetch("http://localhost:1985/api/stop");
         if (res.ok) {
-            setCapturingPcap(false)
+            setCapturingPcap(false);
         }
-    }
+    };
     const startPcap = async () => {
         if (capturingPcap) {
-            return await stopPcap()
+            return await stopPcap();
         }
-        const res = await fetch("http://localhost:1985/api/start")
+        const res = await fetch("http://localhost:1985/api/start");
         if (res.ok) {
-            setCapturingPcap(true)
+            setCapturingPcap(true);
         }
-    }
+    };
 
     useEffect(() => {
         listenPcapEventStream();
-    }, [])
+    }, []);
 
     useEffect(() => {
         if (!lockScroll) return;
@@ -470,7 +526,11 @@ function PacketVisualizer(props: IProps) {
                 <div className="flex flex-col gap-2">
                     <Button
                         id={"visualizer-clear"}
-                        className={capturingPcap ? "bg-red-800 hover:bg-red-900" : "bg-green-800 hover:bg-green-900"}
+                        className={
+                            capturingPcap
+                                ? "bg-red-800 hover:bg-red-900"
+                                : "bg-green-800 hover:bg-green-900"
+                        }
                         onClick={startPcap}
                         tooltip={"Start PCAP capture"}
                     >
@@ -493,6 +553,15 @@ function PacketVisualizer(props: IProps) {
                         tooltip={"Upload Proto"}
                     >
                         <IoMdBook />
+                    </Button>
+
+                    <Button
+                        id={"visualizer-clear"}
+                        className={"bg-aqua hover:brightness-150"}
+                        onClick={onClickMessageSort}
+                        tooltip={"Copy Sort Message"}
+                    >
+                        <IoIosRepeat />
                     </Button>
                 </div>
 
@@ -532,19 +601,6 @@ function PacketVisualizer(props: IProps) {
                     >
                         <IoMdSave />
                     </Button>
-
-                    {packets.length > 0 && (
-                        <Button
-                            id={"visualizer-publish"}
-                            className={"bg-aqua hover:brightness-150"}
-                            onClick={() => setShowPublish(true)}
-                            tooltip={
-                                "Publishes your packet dump to be viewed by anyone"
-                            }
-                        >
-                            <IoMdCloudUpload />
-                        </Button>
-                    )}
 
                     <Button
                         id={"visualizer-load"}
