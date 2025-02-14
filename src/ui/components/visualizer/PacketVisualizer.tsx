@@ -107,7 +107,7 @@ function packetFilter({
                 (filters.length != undefined
                     ? length >= filters.length
                     : true));
-    } catch {}
+    } catch { }
 
     return orand ? filterResult && jsonResult : filterResult || jsonResult;
 }
@@ -400,37 +400,85 @@ function PacketVisualizer(props: IProps) {
         }
     };
 
+    let globalPacketIndex = 0;
+
     const listenPcapEventStream = () => {
         loadSavedProto();
         const ev = new EventSource("http://localhost:1985/api/stream");
+
         ev.addEventListener("packetNotify", (e) => {
             const packet = JSON.parse(e.data) as PacketType;
-            if (packet.data == "") {
+
+            packet.index = globalPacketIndex;
+            globalPacketIndex = globalPacketIndex + 1;
+
+            if (packet.data === "") {
                 const Name = cmdIdToMessageMap[packet.packetId];
                 packet.packetName = Name;
-
                 messageSort[Name] = (messageSort[Name] || 0) + 1;
 
                 if (packet.binary) {
                     try {
-                        const buffer: Buffer = Buffer.from(
-                            packet.binary,
-                            "base64"
-                        );
+                        const buffer = Buffer.from(packet.binary, "base64");
                         const Message = root.lookupType(Name);
-                        packet.data = JSON.stringify(
-                            Message.decode(buffer).toJSON()
-                        );
+                        const decodedMessage = Message.decode(buffer).toJSON();
+
+                        // Special handling for UnionCmdNotify
+                        if (
+                            Name === "UnionCmdNotify" &&
+                            decodedMessage.cmdList &&
+                            Array.isArray(decodedMessage.cmdList)
+                        ) {
+                            decodedMessage.cmdList.forEach((cmd: any) => {
+                                const innerName = cmdIdToMessageMap[cmd.messageId] || "Unknown";
+                                let innerObject = {};
+
+                                try {
+                                    // Decode the inner command's body from base64
+                                    const innerBuffer = Buffer.from(cmd.body, "base64");
+                                    const InnerMessage = root.lookupType(innerName);
+                                    innerObject = InnerMessage.decode(innerBuffer).toJSON();
+                                } catch (innerError) {
+                                    console.error("Error decoding inner message", innerError);
+                                }
+
+                                // Update newPacket with current time, computed length, and an incremented index.
+                                const newPacket: PacketType = {
+                                    packetId: cmd.messageId,
+                                    packetName: innerName,
+                                    data: JSON.stringify({
+                                        object: innerObject,
+                                        raw: cmd.body,
+                                    }),
+                                    binary: "",
+                                    time: Date.now(), // current timestamp
+                                    source: "client",
+                                    length: Buffer.from(cmd.body, "base64").length, // length in bytes of the inner packet
+                                    index: ++globalPacketIndex, // increment global index
+                                };
+
+                                push(newPacket);
+                            });
+                        } else {
+                            // For other packets, simply push the decoded message.
+                            packet.data = JSON.stringify(decodedMessage);
+                            push(packet);
+                        }
                     } catch (error) {
                         console.error("Error decoding proto?", error);
+                        packet.data = JSON.stringify({ status: -1 });
+                        push(packet);
                     }
                 } else {
-                    packet.data = JSON.stringify({});
+                    packet.data = JSON.stringify({ status: -2 });
+                    push(packet);
                 }
+            } else {
+                push(packet);
             }
-            push(packet);
         });
     };
+
     const onClickMessageSort = () => {
         console.log(`cmdIdToMessageMap: `, cmdIdToMessageMap);
         console.log(`messageSort: `, messageSort);
