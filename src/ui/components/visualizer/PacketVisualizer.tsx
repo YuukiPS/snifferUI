@@ -113,6 +113,40 @@ function packetFilter({
 }
 
 /**
+ * Dynamically generate a proto type name from a CombatTypeArgument string.
+ * - For example, "CombatTypeArgument_COMBAT_EVT_BEING_HIT" becomes "EvtBeingHitInfo".
+ * - Returns null for unsupported types (e.g. ENTITY_MOVE).
+ */
+function getDynamicTypeName(argType: string): string | null {
+    if (!argType.startsWith("CombatTypeArgument_")) {
+        return null;
+    }
+
+    // Remove the "CombatTypeArgument_" prefix
+    let stripped = argType.replace("CombatTypeArgument_", "");
+
+    // If the type starts with "COMBAT_", remove that prefix and prepend "Evt"
+    if (stripped.startsWith("COMBAT")) {
+        stripped = stripped.replace("COMBAT", "");
+        // Convert from snake_case to CamelCase
+        const camel = stripped
+            .toLowerCase()
+            .split("_")
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join("");
+        return camel + "Info";
+    }
+
+    // Fallback: convert remaining string to CamelCase and append "Info"
+    const camel = stripped
+        .toLowerCase()
+        .split("_")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join("");
+    return camel + "Info";
+}
+
+/**
  * Recursively determines all values in an object.
  *
  * @param data The data to determine values for.
@@ -403,77 +437,110 @@ function PacketVisualizer(props: IProps) {
     let globalPacketIndex = 0;
 
     const listenPcapEventStream = () => {
+        // Load protocol definitions
         loadSavedProto();
+
+        // Open the event stream
         const ev = new EventSource("http://localhost:1985/api/stream");
 
         ev.addEventListener("packetNotify", (e) => {
+            // Parse the incoming packet and assign a unique index
             const packet = JSON.parse(e.data) as PacketType;
+            packet.index = globalPacketIndex++;
 
-            packet.index = globalPacketIndex;
-            globalPacketIndex = globalPacketIndex + 1;
-
+            // If no textual data is present, we decode the binary proto data
             if (packet.data === "") {
-                const Name = cmdIdToMessageMap[packet.packetId];
-                packet.packetName = Name;
-                messageSort[Name] = (messageSort[Name] || 0) + 1;
+                // Map packet ID to proto name and update statistics
+                const protoName = cmdIdToMessageMap[packet.packetId];
+                packet.packetName = protoName;
+                messageSort[protoName] = (messageSort[protoName] || 0) + 1;
 
                 if (packet.binary) {
                     try {
+                        // Decode the binary data using the proto type
                         const buffer = Buffer.from(packet.binary, "base64");
-                        const Message = root.lookupType(Name);
+                        const Message = root.lookupType(protoName);
                         const decodedMessage = Message.decode(buffer).toJSON();
 
-                        // Special handling for UnionCmdNotify
+                        // Special handling for UnionCmdNotify: process its inner command list
                         if (
-                            Name === "UnionCmdNotify" &&
-                            decodedMessage.cmdList &&
+                            protoName === "UnionCmdNotify" &&
                             Array.isArray(decodedMessage.cmdList)
                         ) {
                             decodedMessage.cmdList.forEach((cmd: any) => {
                                 const innerName = cmdIdToMessageMap[cmd.messageId] || "Unknown";
-                                let innerObject = {};
+                                let innerObject = {} as any;
 
                                 try {
                                     // Decode the inner command's body from base64
                                     const innerBuffer = Buffer.from(cmd.body, "base64");
-                                    const InnerMessage = root.lookupType(innerName);
-                                    innerObject = InnerMessage.decode(innerBuffer).toJSON();
+                                    innerObject = root.lookupType(innerName).decode(innerBuffer).toJSON();
                                 } catch (innerError) {
                                     console.error("Error decoding inner message", innerError);
                                 }
 
-                                // Update newPacket with current time, computed length, and an incremented index.
-                                const newPacket: PacketType = {
-                                    packetId: cmd.messageId,
-                                    packetName: innerName,
-                                    data: JSON.stringify({
-                                        object: innerObject,
-                                        raw: cmd.body,
-                                    }),
-                                    binary: "",
-                                    time: Date.now(), // current timestamp
-                                    source: "client",
-                                    length: Buffer.from(cmd.body, "base64").length, // length in bytes of the inner packet
-                                    index: ++globalPacketIndex, // increment global index
-                                };
+                                // Handle CombatInvocationsNotify with potential dynamic type mapping
+                                if (innerName === "CombatInvocationsNotify" && innerObject["invokeList"]) {
+                                    innerObject.invokeList.forEach((invocation: any) => {
+                                        const dataObj = invocation.combatData;
+                                        let argType = invocation.argumentType;
 
-                                push(newPacket);
+                                        // Use helper to dynamically generate the proto type name
+                                        const dynamicType = getDynamicTypeName(argType);
+                                        if (!dynamicType) return; // Skip if unsupported
+
+                                        try {
+                                            const innerBuffer2 = Buffer.from(dataObj, "base64");
+                                            const InnerMessage2 = root.lookupType(dynamicType);
+                                            const innerObject2 = InnerMessage2.decode(innerBuffer2).toJSON();
+                                            const combinedName = `${innerName} - ${dynamicType}`;
+
+                                            // Create and push a new packet for this inner invocation
+                                            push({
+                                                packetId: 0,
+                                                packetName: combinedName,
+                                                data: JSON.stringify({ object: innerObject2, raw: cmd.body }),
+                                                binary: "",
+                                                time: Date.now(),
+                                                source: "client",
+                                                length: Buffer.from(cmd.body, "base64").length,
+                                                index: ++globalPacketIndex,
+                                            });
+                                        } catch (innerError) {
+                                            console.error("Error decoding combat invocation", innerError);
+                                        }
+                                    });
+                                } else {
+                                    // For other inner commands, push the decoded message
+                                    push({
+                                        packetId: cmd.messageId,
+                                        packetName: innerName,
+                                        data: JSON.stringify({ object: innerObject, raw: cmd.body }),
+                                        binary: "",
+                                        time: Date.now(),
+                                        source: "client",
+                                        length: Buffer.from(cmd.body, "base64").length,
+                                        index: ++globalPacketIndex,
+                                    });
+                                }
                             });
                         } else {
-                            // For other packets, simply push the decoded message.
+                            // For non-UnionCmdNotify packets, simply attach the decoded data
                             packet.data = JSON.stringify(decodedMessage);
                             push(packet);
                         }
                     } catch (error) {
-                        console.error("Error decoding proto?", error);
+                        console.error("Error decoding proto", error);
                         packet.data = JSON.stringify({ status: -1 });
                         push(packet);
                     }
                 } else {
+                    // If binary data is missing, return an error status
                     packet.data = JSON.stringify({ status: -2 });
                     push(packet);
                 }
             } else {
+                // If the packet already contains textual data, push it as is
                 push(packet);
             }
         });
