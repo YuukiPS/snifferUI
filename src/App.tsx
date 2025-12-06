@@ -50,14 +50,14 @@ function App() {
     }
   }, []);
 
-  const rebuildFromProto = (protoText: string): void => {
+  const rebuildFromProto = (protoText: string): { success: boolean; mappingCount: number; error?: string } => {
     try {
       const parsed = protobuf.parse(protoText);
       protoRootRef.current = parsed.root;
     } catch (error) {
       console.error("Error parsing proto file:", error);
-      alert("Error parsing proto file. Check console for details.");
-      return;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, mappingCount: 0, error: errorMessage };
     }
 
     const newMap: { [cmdId: number]: string } = {};
@@ -82,7 +82,9 @@ function App() {
     }
 
     setCmdIdToMessageMap(newMap);
-    console.log(`Proto processed with ${Object.keys(newMap).length} cmdId mappings.`);
+    const mappingCount = Object.keys(newMap).length;
+    console.log(`Proto processed with ${mappingCount} cmdId mappings.`);
+    return { success: true, mappingCount };
   };
 
   const handleUpload = (data: any[]) => {
@@ -292,8 +294,8 @@ function App() {
     startMonitoring(address);
   };
 
-  const handleProtoUpload = (protoText: string) => {
-    rebuildFromProto(protoText);
+  const handleProtoUpload = (protoText: string): { success: boolean; mappingCount: number; error?: string } => {
+    return rebuildFromProto(protoText);
   };
 
   return (
