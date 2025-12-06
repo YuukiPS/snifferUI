@@ -7,9 +7,10 @@ interface SidebarProps {
     onClear: () => void;
     onStart: () => void;
     isMonitoring: boolean;
+    onProtoClick: () => void;
 }
 
-export const Sidebar = ({ onUpload, onFilterClick, onClear, onStart, isMonitoring }: SidebarProps) => {
+export const Sidebar = ({ onUpload, onFilterClick, onClear, onStart, isMonitoring, onProtoClick }: SidebarProps) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleUploadClick = () => {
@@ -65,6 +66,9 @@ export const Sidebar = ({ onUpload, onFilterClick, onClear, onStart, isMonitorin
                 </button>
                 <button className="sidebar-btn" title="Filter Settings" onClick={onFilterClick}>
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" /></svg>
+                </button>
+                <button className="sidebar-btn" title="Upload Proto File" onClick={onProtoClick}>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z" /></svg>
                 </button>
             </div>
 

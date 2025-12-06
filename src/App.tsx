@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import * as protobuf from 'protobufjs';
 import './App.css';
 import { Sidebar } from './components/Sidebar';
 import { PacketTable } from './components/PacketTable';
 import { PacketDetail } from './components/PacketDetail';
 import { FilterSettings } from './components/FilterSettings';
 import { ServerModal } from './components/ServerModal';
+import { ProtoUploadModal } from './components/ProtoUploadModal';
 import type { Packet } from './types';
 
 function App() {
@@ -17,11 +19,16 @@ function App() {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
-
   const [isServerModalOpen, setIsServerModalOpen] = useState(false);
+  const [isProtoModalOpen, setIsProtoModalOpen] = useState(false);
   const [serverAddress, setServerAddress] = useState(() => {
     return localStorage.getItem('packet_monitor_server_address') || "http://localhost:1985";
   });
+
+  // Proto-related state
+  const protoRootRef = useRef<protobuf.Root>(new protobuf.Root());
+  const [cmdIdToMessageMap, setCmdIdToMessageMap] = useState<{ [cmdId: number]: string }>({});
+  const globalPacketIndexRef = useRef(0);
 
   useEffect(() => {
     const handleClick = () => {
@@ -30,6 +37,50 @@ function App() {
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
   }, [contextMenu]);
+
+  // Load saved proto on mount
+  useEffect(() => {
+    const savedProto = localStorage.getItem("protoFileContent");
+    if (savedProto) {
+      console.log("Found saved proto file. Rebuilding proto...");
+      rebuildFromProto(savedProto);
+    }
+  }, []);
+
+  const rebuildFromProto = (protoText: string): void => {
+    try {
+      const parsed = protobuf.parse(protoText);
+      protoRootRef.current = parsed.root;
+    } catch (error) {
+      console.error("Error parsing proto file:", error);
+      alert("Error parsing proto file. Check console for details.");
+      return;
+    }
+
+    const newMap: { [cmdId: number]: string } = {};
+    let pendingCmdId: number | null = null;
+    const cmdIdRegex = /^\/\/\s*CmdId:\s*(\d+)/;
+    const messageRegex = /^message\s+(\w+)/;
+    const lines = protoText.split(/\r?\n/);
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      const cmdMatch = trimmedLine.match(cmdIdRegex);
+      if (cmdMatch) {
+        pendingCmdId = Number(cmdMatch[1]);
+        continue;
+      }
+      const msgMatch = trimmedLine.match(messageRegex);
+      if (msgMatch && pendingCmdId !== null) {
+        const messageName = msgMatch[1];
+        newMap[pendingCmdId] = messageName;
+        pendingCmdId = null;
+      }
+    }
+
+    setCmdIdToMessageMap(newMap);
+    console.log(`Proto processed with ${Object.keys(newMap).length} cmdId mappings.`);
+  };
 
   const handleUpload = (data: any[]) => {
     try {
@@ -144,37 +195,62 @@ function App() {
       es.addEventListener("packetNotify", (e) => {
         try {
           const packetData = JSON.parse(e.data);
+          const currentIndex = globalPacketIndexRef.current++;
 
-          // Map to local Packet type
-          // Note: old_code logic handles 'data' parsing or empty check.
-          // We'll simplisticly map it here similarly to storage/upload logic.
+          // Check if data is empty but binary exists - decode with proto
+          if (packetData.data === "" && packetData.binary) {
+            const protoName = cmdIdToMessageMap[packetData.packetId];
 
-          let parsedOuterData = packetData.data;
-          if (typeof packetData.data === 'string') {
-            // Try to parse if it looks like JSON or if it's not empty
-            if (packetData.data.trim().startsWith('{') || packetData.data.trim().startsWith('[')) {
-              try {
-                parsedOuterData = JSON.parse(packetData.data);
-              } catch {
-                // keep as string
+            if (!protoName) {
+              console.warn(`No proto mapping for packetId ${packetData.packetId}`);
+              return;
+            }
+
+            try {
+              // Decode binary using protobuf
+              const buffer = Uint8Array.from(atob(packetData.binary), c => c.charCodeAt(0));
+              const Message = protoRootRef.current.lookupType(protoName);
+              const decodedMessage = Message.decode(buffer).toJSON();
+
+              const newPacket: Packet = {
+                timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
+                source: (packetData.source?.toUpperCase() === 'CLIENT' ? 'CLIENT' : 'SERVER'),
+                id: packetData.packetId,
+                packetName: protoName,
+                length: packetData.length || buffer.length,
+                index: currentIndex,
+                data: decodedMessage
+              };
+
+              setPackets(prev => [...prev, newPacket]);
+            } catch (error) {
+              console.error("Error decoding proto:", error);
+            }
+          } else {
+            // Handle regular JSON data
+            let parsedOuterData = packetData.data;
+            if (typeof packetData.data === 'string' && packetData.data.trim()) {
+              if (packetData.data.trim().startsWith('{') || packetData.data.trim().startsWith('[')) {
+                try {
+                  parsedOuterData = JSON.parse(packetData.data);
+                } catch {
+                  // keep as string
+                }
               }
             }
+
+            const newPacket: Packet = {
+              timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
+              source: (packetData.source?.toUpperCase() === 'CLIENT' ? 'CLIENT' : 'SERVER'),
+              id: packetData.packetId || 0,
+              packetName: packetData.packetName || 'Unknown',
+              length: packetData.length || 0,
+              index: currentIndex,
+              data: parsedOuterData
+            };
+
+            setPackets(prev => [...prev, newPacket]);
           }
-
-          const newPacket: Packet = {
-            timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
-            source: packetData.source || 'CLIENT', // simple fallback
-            id: packetData.packetId || 0,
-            packetName: packetData.packetName || 'Unknown',
-            length: packetData.length || 0,
-            index: -1, // Will be set by setPackets
-            data: parsedOuterData
-          };
-
-          setPackets(prev => {
-            const nextIndex = prev.length;
-            return [...prev, { ...newPacket, index: nextIndex }];
-          });
 
         } catch (err) {
           console.error("Error parsing stream packet:", err);
@@ -186,10 +262,7 @@ function App() {
         es.close();
         setIsMonitoring(false);
         eventSourceRef.current = null;
-        // Only alert if we were actually monitoring, to avoid spam on hard disconnects
-        if (isMonitoring) {
-          alert("Connection lost or failed to connect.");
-        }
+        alert("Connection lost or failed to connect.");
       };
 
       eventSourceRef.current = es;
@@ -216,6 +289,10 @@ function App() {
     startMonitoring(address);
   };
 
+  const handleProtoUpload = (protoText: string) => {
+    rebuildFromProto(protoText);
+  };
+
   return (
     <div className="app-container">
       <Sidebar
@@ -224,6 +301,7 @@ function App() {
         onClear={handleClear}
         onStart={handleStartButton}
         isMonitoring={isMonitoring}
+        onProtoClick={() => setIsProtoModalOpen(true)}
       />
       <div className="main-content">
         <div className="top-bar">
@@ -292,6 +370,12 @@ function App() {
         onClose={() => setIsServerModalOpen(false)}
         onConnect={handleConnect}
         initialAddress={serverAddress}
+      />
+
+      <ProtoUploadModal
+        isOpen={isProtoModalOpen}
+        onClose={() => setIsProtoModalOpen(false)}
+        onProtoUploaded={handleProtoUpload}
       />
     </div>
   );
