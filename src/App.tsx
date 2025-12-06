@@ -7,6 +7,7 @@ import { PacketDetail } from './components/PacketDetail';
 import { FilterSettings } from './components/FilterSettings';
 import { ServerModal } from './components/ServerModal';
 import { ProtoUploadModal } from './components/ProtoUploadModal';
+import { JsonUploadModal } from './components/JsonUploadModal';
 import type { Packet } from './types';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
 
   const [isServerModalOpen, setIsServerModalOpen] = useState(false);
   const [isProtoModalOpen, setIsProtoModalOpen] = useState(false);
+  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
   const [serverAddress, setServerAddress] = useState(() => {
     return localStorage.getItem('packet_monitor_server_address') || "http://localhost:1985";
   });
@@ -87,7 +89,7 @@ function App() {
     return { success: true, mappingCount };
   };
 
-  const handleUpload = (data: any[]) => {
+  const handleUpload = (data: any[]): { success: boolean; packetCount: number; error?: string } => {
     try {
       const mappedPackets: Packet[] = data.map((item: any, index: number) => {
         let parsedData = item.data;
@@ -111,9 +113,11 @@ function App() {
         };
       });
       setPackets(mappedPackets);
+      return { success: true, packetCount: mappedPackets.length };
     } catch (error) {
       console.error("Error processing uploaded data:", error);
-      alert("Error processing uploaded data. Please check the console.");
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, packetCount: 0, error: errorMessage };
     }
   };
 
@@ -301,12 +305,12 @@ function App() {
   return (
     <div className="app-container">
       <Sidebar
-        onUpload={handleUpload}
         onFilterClick={() => setIsFilterSettingsOpen(true)}
         onClear={handleClear}
         onStart={handleStartButton}
         isMonitoring={isMonitoring}
         onProtoClick={() => setIsProtoModalOpen(true)}
+        onJsonClick={() => setIsJsonModalOpen(true)}
         autoScroll={autoScroll}
         onAutoScrollToggle={() => setAutoScroll(!autoScroll)}
       />
@@ -384,6 +388,12 @@ function App() {
         isOpen={isProtoModalOpen}
         onClose={() => setIsProtoModalOpen(false)}
         onProtoUploaded={handleProtoUpload}
+      />
+
+      <JsonUploadModal
+        isOpen={isJsonModalOpen}
+        onClose={() => setIsJsonModalOpen(false)}
+        onJsonUploaded={handleUpload}
       />
     </div>
   );

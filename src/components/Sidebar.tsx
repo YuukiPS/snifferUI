@@ -1,56 +1,21 @@
-import { useRef, type ChangeEvent } from 'react';
 import './Sidebar.css';
 
 interface SidebarProps {
-    onUpload: (data: any[]) => void;
     onFilterClick: () => void;
     onClear: () => void;
     onStart: () => void;
     isMonitoring: boolean;
     onProtoClick: () => void;
+    onJsonClick: () => void;
     autoScroll: boolean;
     onAutoScrollToggle: () => void;
 }
 
-export const Sidebar = ({ onUpload, onFilterClick, onClear, onStart, isMonitoring, onProtoClick, autoScroll, onAutoScrollToggle }: SidebarProps) => {
-    const fileInputRef = useRef<HTMLInputElement>(null);
+export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, onProtoClick, onJsonClick, autoScroll, onAutoScrollToggle }: SidebarProps) => {
 
-    const handleUploadClick = () => {
-        fileInputRef.current?.click();
-    };
-
-    const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const content = e.target?.result as string;
-                const data = JSON.parse(content);
-                if (Array.isArray(data)) {
-                    onUpload(data);
-                } else {
-                    console.error("Uploaded file is not an array");
-                }
-            } catch (error) {
-                console.error("Error parsing JSON:", error);
-            }
-        };
-        reader.readAsText(file);
-        // Reset value so same file can be selected again
-        event.target.value = '';
-    };
 
     return (
         <div className="sidebar">
-            <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                accept=".json"
-                onChange={handleFileChange}
-            />
             <div className="sidebar-group">
                 <button
                     className={`sidebar-btn ${isMonitoring ? 'stop' : 'play'}`}
@@ -63,7 +28,7 @@ export const Sidebar = ({ onUpload, onFilterClick, onClear, onStart, isMonitorin
                         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> // Play icon
                     )}
                 </button>
-                <button className="sidebar-btn" title="Upload" onClick={handleUploadClick}>
+                <button className="sidebar-btn" title="Upload JSON" onClick={onJsonClick}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                 </button>
                 <button className="sidebar-btn" title="Filter Settings" onClick={onFilterClick}>
