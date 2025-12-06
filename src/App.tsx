@@ -93,11 +93,17 @@ function App() {
     setHiddenNames(prev => prev.filter(n => n !== name));
   };
 
+  const handleClear = () => {
+    setPackets([]);
+    setSelectedPacket(null);
+  };
+
   return (
     <div className="app-container">
       <Sidebar
         onUpload={handleUpload}
         onFilterClick={() => setIsFilterSettingsOpen(true)}
+        onClear={handleClear}
       />
       <div className="main-content">
         <div className="top-bar">
