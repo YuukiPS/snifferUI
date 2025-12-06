@@ -3,9 +3,10 @@ import './Sidebar.css';
 
 interface SidebarProps {
     onUpload: (data: any[]) => void;
+    onFilterClick: () => void;
 }
 
-export const Sidebar = ({ onUpload }: SidebarProps) => {
+export const Sidebar = ({ onUpload, onFilterClick }: SidebarProps) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleUploadClick = () => {
@@ -51,11 +52,8 @@ export const Sidebar = ({ onUpload }: SidebarProps) => {
                 <button className="sidebar-btn" title="Upload" onClick={handleUploadClick}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                 </button>
-                <button className="sidebar-btn active" title="Library">
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z" /></svg>
-                </button>
-                <button className="sidebar-btn" title="Transfer">
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z" /></svg>
+                <button className="sidebar-btn" title="Filter Settings" onClick={onFilterClick}>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" /></svg>
                 </button>
             </div>
 

@@ -70,3 +70,30 @@
   color: #ccc;
   margin-right: 15px;
 }
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  background: #252526;
+  border: 1px solid #454545;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  z-index: 1000;
+  min-width: 150px;
+  border-radius: 4px;
+}
+
+.context-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #cccccc;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+  background-color: #094771;
+  color: #ffffff;
+}

@@ -1,14 +1,26 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import './App.css';
 import { Sidebar } from './components/Sidebar';
 import { PacketTable } from './components/PacketTable';
 import { PacketDetail } from './components/PacketDetail';
+import { FilterSettings } from './components/FilterSettings';
 import type { Packet } from './types';
 
 function App() {
   const [packets, setPackets] = useState<Packet[]>([]);
   const [selectedPacket, setSelectedPacket] = useState<Packet | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [hiddenNames, setHiddenNames] = useState<string[]>([]);
+  const [isFilterSettingsOpen, setIsFilterSettingsOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, packetName: string } | null>(null);
+
+  useEffect(() => {
+    const handleClick = () => {
+      if (contextMenu) setContextMenu(null);
+    };
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, [contextMenu]);
 
   const handleUpload = (data: any[]) => {
     try {
@@ -41,18 +53,52 @@ function App() {
   };
 
   const filteredPackets = useMemo(() => {
-    if (!searchTerm) return packets;
-    const term = searchTerm.toLowerCase();
-    return packets.filter(p =>
-      p.packetName.toLowerCase().includes(term) ||
-      p.id.toString().includes(term) ||
-      JSON.stringify(p.data).toLowerCase().includes(term)
-    );
-  }, [packets, searchTerm]);
+    let result = packets;
+
+    // Apply hidden filter
+    if (hiddenNames.length > 0) {
+      result = result.filter(p => !hiddenNames.includes(p.packetName));
+    }
+
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(p =>
+        p.packetName.toLowerCase().includes(term) ||
+        p.id.toString().includes(term) ||
+        JSON.stringify(p.data).toLowerCase().includes(term)
+      );
+    }
+
+    return result;
+  }, [packets, searchTerm, hiddenNames]);
+
+  const handleRowContextMenu = (event: React.MouseEvent, packet: Packet) => {
+    event.preventDefault(); // Prevent native context menu just in case, though PacketTable handles it
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      packetName: packet.packetName
+    });
+  };
+
+  const handleHidePacketName = (name: string) => {
+    if (!hiddenNames.includes(name)) {
+      setHiddenNames(prev => [...prev, name]);
+    }
+    setContextMenu(null);
+  };
+
+  const handleUnhidePacketName = (name: string) => {
+    setHiddenNames(prev => prev.filter(n => n !== name));
+  };
 
   return (
     <div className="app-container">
-      <Sidebar onUpload={handleUpload} />
+      <Sidebar
+        onUpload={handleUpload}
+        onFilterClick={() => setIsFilterSettingsOpen(true)}
+      />
       <div className="main-content">
         <div className="top-bar">
           <svg className="search-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
@@ -74,6 +120,7 @@ function App() {
             packets={filteredPackets}
             selectedPacket={selectedPacket}
             onSelectPacket={setSelectedPacket}
+            onRowContextMenu={handleRowContextMenu}
           />
         ) : (
           <div className="empty-state" style={{
@@ -90,6 +137,29 @@ function App() {
         )}
       </div>
       <PacketDetail packet={selectedPacket} />
+
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="context-menu-item"
+            onClick={() => handleHidePacketName(contextMenu.packetName)}
+          >
+            Hide "{contextMenu.packetName}"
+          </div>
+        </div>
+      )}
+
+      {isFilterSettingsOpen && (
+        <FilterSettings
+          hiddenNames={hiddenNames}
+          onUnhide={handleUnhidePacketName}
+          onClose={() => setIsFilterSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }

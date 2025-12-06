@@ -6,11 +6,12 @@ interface PacketTableProps {
     packets: Packet[];
     selectedPacket: Packet | null;
     onSelectPacket: (packet: Packet) => void;
+    onRowContextMenu: (event: React.MouseEvent, packet: Packet) => void;
 }
 
 type SortKey = 'timestamp' | 'index' | 'id' | 'packetName' | 'length';
 
-export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacket, onSelectPacket }) => {
+export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacket, onSelectPacket, onRowContextMenu }) => {
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
         key: 'index',
         direction: 'asc'
@@ -67,6 +68,11 @@ export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacke
         return <span className="sort-indicator">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>;
     };
 
+    const handleNameContextMenu = (e: React.MouseEvent, packet: Packet) => {
+        e.preventDefault();
+        onRowContextMenu(e, packet);
+    };
+
     return (
         <div className="packet-table-container">
             <table className="packet-table">
@@ -106,7 +112,13 @@ export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacke
                                 </span>
                             </td>
                             <td className="text-right font-mono text-sm">{packet.id}</td>
-                            <td className="font-mono text-accent">{packet.packetName}</td>
+                            <td
+                                className="font-mono text-accent"
+                                onContextMenu={(e) => handleNameContextMenu(e, packet)}
+                                style={{ cursor: 'context-menu' }}
+                            >
+                                {packet.packetName}
+                            </td>
                             <td className="text-right font-mono text-sm">{packet.length}</td>
                             <td className="font-mono text-xs text-muted truncate">
                                 {JSON.stringify(packet.data)}
