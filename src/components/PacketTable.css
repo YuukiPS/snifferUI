@@ -120,3 +120,74 @@
     max-width: 0;
     /* Necessary for flex/table overflow to work? requires table-layout: fixed */
 }
+
+/* Virtualized List Styles */
+.packet-table-header {
+    background-color: var(--bg-header);
+    border-bottom: 2px solid var(--accent-primary);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.header-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.header-cell {
+    padding: 0 8px;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s, background-color 0.2s;
+    border-right: 1px solid var(--border-color);
+}
+
+.header-cell:hover {
+    color: var(--text-primary);
+    background-color: var(--row-hover);
+}
+
+.virtual-list {
+    background-color: var(--bg-primary);
+}
+
+.virtual-row {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #2a2a2a;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.virtual-row:hover {
+    background-color: var(--row-hover);
+}
+
+.virtual-row.selected {
+    background-color: var(--selection-bg);
+    color: white;
+}
+
+.virtual-cell {
+    padding: 4px 8px;
+    border-right: 1px solid #2a2a2a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+}
+
+.virtual-row.selected .virtual-cell {
+    border-color: transparent;
+}
+
+.virtual-row.selected .text-muted {
+    color: #ccc;
+}

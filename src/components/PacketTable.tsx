@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Packet } from '../types';
 import './PacketTable.css';
 
@@ -16,6 +17,8 @@ export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacke
         key: 'index',
         direction: 'asc'
     });
+
+    const parentRef = useRef<HTMLDivElement>(null);
 
     const sortedPackets = useMemo(() => {
         const sorted = [...packets];
@@ -41,7 +44,6 @@ export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacke
                     bValue = b.packetName;
                     break;
                 case 'timestamp':
-                    // If timestamp strings are comparable directly
                     aValue = a.timestamp;
                     bValue = b.timestamp;
                     break;
@@ -55,6 +57,13 @@ export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacke
         });
         return sorted;
     }, [packets, sortConfig]);
+
+    const virtualizer = useVirtualizer({
+        count: sortedPackets.length,
+        getScrollElement: () => parentRef.current,
+        estimateSize: () => 40,
+        overscan: 5,
+    });
 
     const handleSort = (key: SortKey) => {
         setSortConfig(current => ({
@@ -75,58 +84,87 @@ export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacke
 
     return (
         <div className="packet-table-container">
-            <table className="packet-table">
-                <thead>
-                    <tr>
-                        <th style={{ width: '140px' }} onClick={() => handleSort('timestamp')}>
-                            Time{getSortIndicator('timestamp')}
-                        </th>
-                        <th style={{ width: '60px' }} onClick={() => handleSort('index')}>
-                            #{getSortIndicator('index')}
-                        </th>
-                        <th style={{ width: '100px' }}>Source</th>
-                        <th style={{ width: '80px' }} onClick={() => handleSort('id')}>
-                            ID{getSortIndicator('id')}
-                        </th>
-                        <th style={{ width: '200px' }} onClick={() => handleSort('packetName')}>
-                            Packet Name{getSortIndicator('packetName')}
-                        </th>
-                        <th style={{ width: '80px' }} onClick={() => handleSort('length')}>
-                            Length{getSortIndicator('length')}
-                        </th>
-                        <th>Data</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {sortedPackets.map((packet) => (
-                        <tr
-                            key={packet.index} // Use index as key if it's unique and stable for this view
-                            className={selectedPacket === packet ? 'selected' : ''}
-                            onClick={() => onSelectPacket(packet)}
-                        >
-                            <td className="font-mono text-sm">{packet.timestamp}</td>
-                            <td className="text-right text-sm">{packet.index}</td>
-                            <td className="text-center">
-                                <span className={`source-badge ${packet.source.toLowerCase()}`}>
-                                    {packet.source}
-                                </span>
-                            </td>
-                            <td className="text-right font-mono text-sm">{packet.id}</td>
-                            <td
-                                className="font-mono text-accent"
-                                onContextMenu={(e) => handleNameContextMenu(e, packet)}
-                                style={{ cursor: 'context-menu' }}
+            <div className="packet-table-header">
+                <div className="header-row">
+                    <div className="header-cell" style={{ width: '140px' }} onClick={() => handleSort('timestamp')}>
+                        Time{getSortIndicator('timestamp')}
+                    </div>
+                    <div className="header-cell" style={{ width: '60px' }} onClick={() => handleSort('index')}>
+                        #{getSortIndicator('index')}
+                    </div>
+                    <div className="header-cell" style={{ width: '100px' }}>
+                        Source
+                    </div>
+                    <div className="header-cell" style={{ width: '80px' }} onClick={() => handleSort('id')}>
+                        ID{getSortIndicator('id')}
+                    </div>
+                    <div className="header-cell" style={{ width: '200px' }} onClick={() => handleSort('packetName')}>
+                        Packet Name{getSortIndicator('packetName')}
+                    </div>
+                    <div className="header-cell" style={{ width: '80px' }} onClick={() => handleSort('length')}>
+                        Length{getSortIndicator('length')}
+                    </div>
+                    <div className="header-cell" style={{ flex: 1 }}>
+                        Data
+                    </div>
+                </div>
+            </div>
+            <div ref={parentRef} className="virtual-list" style={{ height: 'calc(100vh - 90px)', overflow: 'auto' }}>
+                <div
+                    style={{
+                        height: `${virtualizer.getTotalSize()}px`,
+                        width: '100%',
+                        position: 'relative',
+                    }}
+                >
+                    {virtualizer.getVirtualItems().map((virtualRow) => {
+                        const packet = sortedPackets[virtualRow.index];
+                        return (
+                            <div
+                                key={virtualRow.key}
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: `${virtualRow.size}px`,
+                                    transform: `translateY(${virtualRow.start}px)`,
+                                }}
+                                className={`virtual-row ${selectedPacket === packet ? 'selected' : ''}`}
+                                onClick={() => onSelectPacket(packet)}
                             >
-                                {packet.packetName}
-                            </td>
-                            <td className="text-right font-mono text-sm">{packet.length}</td>
-                            <td className="font-mono text-xs text-muted truncate">
-                                {JSON.stringify(packet.data)}
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+                                <div className="virtual-cell font-mono text-sm" style={{ width: '140px' }}>
+                                    {packet.timestamp}
+                                </div>
+                                <div className="virtual-cell text-right text-sm" style={{ width: '60px' }}>
+                                    {packet.index}
+                                </div>
+                                <div className="virtual-cell text-center" style={{ width: '100px' }}>
+                                    <span className={`source-badge ${packet.source.toLowerCase()}`}>
+                                        {packet.source}
+                                    </span>
+                                </div>
+                                <div className="virtual-cell text-right font-mono text-sm" style={{ width: '80px' }}>
+                                    {packet.id}
+                                </div>
+                                <div
+                                    className="virtual-cell font-mono text-accent"
+                                    style={{ width: '200px', cursor: 'context-menu' }}
+                                    onContextMenu={(e) => handleNameContextMenu(e, packet)}
+                                >
+                                    {packet.packetName}
+                                </div>
+                                <div className="virtual-cell text-right font-mono text-sm" style={{ width: '80px' }}>
+                                    {packet.length}
+                                </div>
+                                <div className="virtual-cell font-mono text-xs" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {typeof packet.data === 'string' ? packet.data : JSON.stringify(packet.data)}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 };
