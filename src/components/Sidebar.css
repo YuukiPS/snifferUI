@@ -1,0 +1,89 @@
+.sidebar {
+    width: 50px;
+    background-color: var(--bg-tertiary);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border-color);
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.sidebar-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-btn {
+    width: 50px;
+    height: 50px;
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    position: relative;
+}
+
+.sidebar-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.sidebar-btn:hover {
+    background-color: #333;
+    color: #fff;
+}
+
+/* Specific button styles */
+.sidebar-btn.play {
+    background-color: #1c5e34;
+    /* Darker green */
+    color: #4ade80;
+    /* Bright green icon */
+}
+
+.sidebar-btn.play:hover {
+    background-color: #15803d;
+    color: #fff;
+}
+
+.sidebar-btn.stop {
+    background-color: #7f1d1d;
+    /* Dark Red */
+    color: #f87171;
+    margin-top: auto;
+}
+
+.sidebar-btn.stop:hover {
+    background-color: #b91c1c;
+    color: #fff;
+}
+
+.sidebar-btn.scroll {
+    background-color: #1e3a8a;
+    /* Dark Blue */
+    color: #60a5fa;
+}
+
+.sidebar-btn.scroll:hover {
+    background-color: #2563eb;
+    color: #fff;
+}
+
+.sidebar-btn.active {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.sidebar-btn.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: white;
+}

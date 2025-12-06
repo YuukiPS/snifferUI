@@ -1,0 +1,72 @@
+/* App.css */
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* overflow fix */
+}
+
+.top-bar {
+  height: 40px;
+  background-color: #252526;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 8px;
+}
+
+.search-group {
+  display: flex;
+  align-items: center;
+  background-color: #3c3c3c;
+  border-radius: 3px;
+  padding: 2px 5px;
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-icon {
+  width: 16px;
+  height: 16px;
+  color: #ccc;
+  margin-right: 5px;
+}
+
+.search-input-main {
+  background: transparent;
+  border: none;
+  color: white;
+  flex: 1;
+  font-size: 13px;
+  outline: none;
+  font-family: var(--font-sans);
+}
+
+.filter-btn {
+  background-color: #007acc;
+  color: white;
+  border: none;
+  padding: 2px 6px;
+  font-size: 11px;
+  border-radius: 2px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.title-bar {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ccc;
+  margin-right: 15px;
+}

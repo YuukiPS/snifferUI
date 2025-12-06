@@ -1,0 +1,129 @@
+.packet-detail {
+    width: 400px;
+    /* Default width */
+    min-width: 300px;
+    background-color: var(--bg-tertiary);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.packet-detail.empty {
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.detail-header {
+    background-color: #252526;
+    padding: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.detail-title {
+    font-weight: bold;
+    font-family: var(--font-mono);
+    margin-bottom: 8px;
+    color: #fff;
+}
+
+.detail-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.toolbar-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px 8px;
+    font-size: 12px;
+    border-radius: 2px;
+}
+
+.toolbar-btn:hover {
+    background-color: #3e3e42;
+    color: #fff;
+}
+
+.toolbar-btn.active {
+    background-color: #04395e;
+    color: #fff;
+}
+
+.divider {
+    width: 1px;
+    height: 16px;
+    background-color: #444;
+    margin: 0 4px;
+}
+
+.search-input {
+    background-color: #3c3c3c;
+    border: 1px solid #3c3c3c;
+    color: #fff;
+    padding: 2px 4px;
+    font-size: 12px;
+    border-radius: 2px;
+    flex: 1;
+}
+
+.detail-content {
+    flex: 1;
+    overflow: auto;
+    padding: 0;
+    background-color: #1e1e1e;
+}
+
+.meta-info {
+    padding: 8px;
+    background-color: #2d2d2d;
+    font-size: 11px;
+    color: #ccc;
+    border-bottom: 1px solid #333;
+}
+
+.meta-info .label {
+    color: #888;
+    margin-right: 4px;
+}
+
+.meta-info .sep {
+    color: #555;
+    margin: 0 8px;
+}
+
+.json-viewer {
+    padding: 10px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    color: #d4d4d4;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+}
+
+/* JSON Syntax Highlighting */
+.json-key {
+    color: #9cdcfe;
+}
+
+.json-string {
+    color: #ce9178;
+}
+
+.json-number {
+    color: #b5cea8;
+}
+
+.json-boolean {
+    color: #569cd6;
+}
+
+.json-null {
+    color: #569cd6;
+}

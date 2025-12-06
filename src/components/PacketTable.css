@@ -1,0 +1,106 @@
+.packet-table-container {
+    flex: 1;
+    overflow: auto;
+    background-color: var(--bg-header);
+    /* Default bg */
+}
+
+.packet-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--text-primary);
+    font-size: 13px;
+    table-layout: fixed;
+    /* For proper text truncation */
+}
+
+.packet-table thead {
+    background-color: var(--bg-header);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 2px solid var(--accent-primary);
+    /* Use a blue line under header like screenshot maybe? Or simple border */
+}
+
+.packet-table th {
+    padding: 8px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-right: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.packet-table td {
+    padding: 4px 8px;
+    border-right: 1px solid #2a2a2a;
+    border-bottom: 1px solid #2a2a2a;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.packet-table tr:hover {
+    background-color: var(--row-hover);
+}
+
+.packet-table tr.selected {
+    background-color: var(--selection-bg);
+    color: white;
+}
+
+.packet-table tr.selected td {
+    border-color: transparent;
+    /* Cleaner look on selection */
+}
+
+/* Source Badges */
+.source-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    color: white;
+    min-width: 50px;
+    text-align: center;
+}
+
+.source-badge.client {
+    background-color: var(--accent-primary);
+}
+
+.source-badge.server {
+    background-color: var(--accent-secondary);
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-accent {
+    color: #a5d6ff;
+}
+
+/* Light blue for names */
+.text-muted {
+    color: var(--text-muted);
+}
+
+.packet-table tr.selected .text-muted {
+    color: #ccc;
+}
+
+.truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 0;
+    /* Necessary for flex/table overflow to work? requires table-layout: fixed */
+}
