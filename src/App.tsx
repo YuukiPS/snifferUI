@@ -12,7 +12,7 @@ function App() {
 
   const handleUpload = (data: any[]) => {
     try {
-      const mappedPackets: Packet[] = data.map((item: any) => {
+      const mappedPackets: Packet[] = data.map((item: any, index: number) => {
         let parsedData = item.data;
         if (typeof item.data === 'string') {
           try {
@@ -29,6 +29,7 @@ function App() {
           id: item.packetId,
           packetName: item.packetName,
           length: item.length,
+          index: index,
           data: parsedData
         };
       });

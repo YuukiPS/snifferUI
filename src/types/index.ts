@@ -4,6 +4,7 @@ export interface Packet {
     id: number;
     packetName: string;
     length: number;
+    index: number;
     data: any; // JSON object
 }
 

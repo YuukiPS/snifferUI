@@ -30,7 +30,23 @@
     color: var(--text-secondary);
     border-right: 1px solid var(--border-color);
     white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s, background-color 0.2s;
 }
+
+.packet-table th:hover {
+    color: var(--text-primary);
+    background-color: var(--row-hover);
+}
+
+.sort-indicator {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
 
 .packet-table td {
     padding: 4px 8px;
