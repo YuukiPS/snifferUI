@@ -22,7 +22,8 @@ function App() {
     const term = searchTerm.toLowerCase();
     return packets.filter(p =>
       p.packetName.toLowerCase().includes(term) ||
-      p.id.toString().includes(term)
+      p.id.toString().includes(term) ||
+      JSON.stringify(p.data).toLowerCase().includes(term)
     );
   }, [packets, searchTerm]);
 
@@ -35,7 +36,7 @@ function App() {
           <div className="search-group">
             <input
               type="text"
-              placeholder="Packet Name"
+              placeholder="Search Name, ID, JSON..."
               className="search-input-main"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
