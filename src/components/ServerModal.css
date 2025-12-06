@@ -1,0 +1,100 @@
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    background-color: #1e1e1e;
+    padding: 24px;
+    border-radius: 12px;
+    width: 400px;
+    border: 1px solid #333;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
+    animation: modal-pop 0.2s ease-out;
+}
+
+@keyframes modal-pop {
+    0% {
+        transform: scale(0.95);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.modal-content h2 {
+    margin: 0 0 8px 0;
+    color: #fff;
+    font-size: 1.5rem;
+}
+
+.modal-content p {
+    color: #888;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px;
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+    /* Ensure padding doesn't affect width */
+}
+
+.input-group input:focus {
+    border-color: #4ade80;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.modal-actions button {
+    padding: 10px 20px;
+    border-radius: 6px;
+    border: none;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.modal-actions button:hover {
+    opacity: 0.9;
+}
+
+.cancel-btn {
+    background-color: transparent;
+    color: #888;
+}
+
+.cancel-btn:hover {
+    background-color: #333;
+    color: #fff;
+}
+
+.connect-btn {
+    background-color: #1c5e34;
+    color: #4ade80;
+}

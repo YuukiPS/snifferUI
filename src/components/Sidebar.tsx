@@ -5,9 +5,11 @@ interface SidebarProps {
     onUpload: (data: any[]) => void;
     onFilterClick: () => void;
     onClear: () => void;
+    onStart: () => void;
+    isMonitoring: boolean;
 }
 
-export const Sidebar = ({ onUpload, onFilterClick, onClear }: SidebarProps) => {
+export const Sidebar = ({ onUpload, onFilterClick, onClear, onStart, isMonitoring }: SidebarProps) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleUploadClick = () => {
@@ -47,8 +49,16 @@ export const Sidebar = ({ onUpload, onFilterClick, onClear }: SidebarProps) => {
                 onChange={handleFileChange}
             />
             <div className="sidebar-group">
-                <button className="sidebar-btn play" title="Start/Resume">
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                <button
+                    className={`sidebar-btn ${isMonitoring ? 'stop' : 'play'}`}
+                    title={isMonitoring ? "Stop Monitoring" : "Start Monitoring"}
+                    onClick={onStart}
+                >
+                    {isMonitoring ? (
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z" /></svg> // Stop icon
+                    ) : (
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> // Play icon
+                    )}
                 </button>
                 <button className="sidebar-btn" title="Upload" onClick={handleUploadClick}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>

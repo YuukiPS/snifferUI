@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import './App.css';
 import { Sidebar } from './components/Sidebar';
 import { PacketTable } from './components/PacketTable';
 import { PacketDetail } from './components/PacketDetail';
 import { FilterSettings } from './components/FilterSettings';
+import { ServerModal } from './components/ServerModal';
 import type { Packet } from './types';
 
 function App() {
@@ -13,6 +14,14 @@ function App() {
   const [hiddenNames, setHiddenNames] = useState<string[]>([]);
   const [isFilterSettingsOpen, setIsFilterSettingsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, packetName: string } | null>(null);
+  const [isMonitoring, setIsMonitoring] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+
+  const [isServerModalOpen, setIsServerModalOpen] = useState(false);
+  const [serverAddress, setServerAddress] = useState(() => {
+    return localStorage.getItem('packet_monitor_server_address') || "http://localhost:1985";
+  });
 
   useEffect(() => {
     const handleClick = () => {
@@ -98,12 +107,123 @@ function App() {
     setSelectedPacket(null);
   };
 
+  const stopMonitoring = async () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setIsMonitoring(false);
+
+    // Hit the backend stop endpoint
+    try {
+      const baseUrl = serverAddress.replace(/\/$/, "");
+      await fetch(`${baseUrl}/api/stop`);
+    } catch (err) {
+      console.error("Failed to call stop API:", err);
+    }
+  };
+
+  const startMonitoring = (address: string) => {
+    // Close existing if any
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    try {
+      // Normalize address (remove trailing slash)
+      const baseUrl = address.replace(/\/$/, "");
+
+      // Trigger backend start
+      fetch(`${baseUrl}/api/start`).catch(err => {
+        console.error("Failed to start backend capture:", err);
+        alert("Failed to start backend capture. Ensure the server is running.");
+      });
+
+      const es = new EventSource(`${baseUrl}/api/stream`);
+
+      es.addEventListener("packetNotify", (e) => {
+        try {
+          const packetData = JSON.parse(e.data);
+
+          // Map to local Packet type
+          // Note: old_code logic handles 'data' parsing or empty check.
+          // We'll simplisticly map it here similarly to storage/upload logic.
+
+          let parsedOuterData = packetData.data;
+          if (typeof packetData.data === 'string') {
+            // Try to parse if it looks like JSON or if it's not empty
+            if (packetData.data.trim().startsWith('{') || packetData.data.trim().startsWith('[')) {
+              try {
+                parsedOuterData = JSON.parse(packetData.data);
+              } catch {
+                // keep as string
+              }
+            }
+          }
+
+          const newPacket: Packet = {
+            timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
+            source: packetData.source || 'CLIENT', // simple fallback
+            id: packetData.packetId || 0,
+            packetName: packetData.packetName || 'Unknown',
+            length: packetData.length || 0,
+            index: -1, // Will be set by setPackets
+            data: parsedOuterData
+          };
+
+          setPackets(prev => {
+            const nextIndex = prev.length;
+            return [...prev, { ...newPacket, index: nextIndex }];
+          });
+
+        } catch (err) {
+          console.error("Error parsing stream packet:", err);
+        }
+      });
+
+      es.onerror = (err) => {
+        console.error("EventSource failed:", err);
+        es.close();
+        setIsMonitoring(false);
+        eventSourceRef.current = null;
+        // Only alert if we were actually monitoring, to avoid spam on hard disconnects
+        if (isMonitoring) {
+          alert("Connection lost or failed to connect.");
+        }
+      };
+
+      eventSourceRef.current = es;
+      setIsMonitoring(true);
+
+    } catch (e) {
+      console.error("Error initiating stream:", e);
+      alert("Invalid URL or connection error.");
+    }
+  };
+
+  const handleStartButton = () => {
+    if (isMonitoring) {
+      stopMonitoring();
+    } else {
+      setIsServerModalOpen(true);
+    }
+  };
+
+  const handleConnect = (address: string) => {
+    setServerAddress(address);
+    localStorage.setItem('packet_monitor_server_address', address);
+    setIsServerModalOpen(false);
+    startMonitoring(address);
+  };
+
   return (
     <div className="app-container">
       <Sidebar
         onUpload={handleUpload}
         onFilterClick={() => setIsFilterSettingsOpen(true)}
         onClear={handleClear}
+        onStart={handleStartButton}
+        isMonitoring={isMonitoring}
       />
       <div className="main-content">
         <div className="top-bar">
@@ -137,8 +257,8 @@ function App() {
             color: '#888',
             flexDirection: 'column'
           }}>
-            <h2>Please upload JSON</h2>
-            <p style={{ marginTop: '10px', fontSize: '0.9em' }}>Click the upload icon in the sidebar to get started.</p>
+            <h2>Please upload JSON or Start Monitoring</h2>
+            <p style={{ marginTop: '10px', fontSize: '0.9em' }}>Click the upload icon or play button to get started.</p>
           </div>
         )}
       </div>
@@ -166,8 +286,16 @@ function App() {
           onClose={() => setIsFilterSettingsOpen(false)}
         />
       )}
+
+      <ServerModal
+        isOpen={isServerModalOpen}
+        onClose={() => setIsServerModalOpen(false)}
+        onConnect={handleConnect}
+        initialAddress={serverAddress}
+      />
     </div>
   );
+
 }
 
 export default App;
