@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Packet } from '../types';
 import './PacketTable.css';
@@ -8,11 +8,17 @@ interface PacketTableProps {
     selectedPacket: Packet | null;
     onSelectPacket: (packet: Packet) => void;
     onRowContextMenu: (event: React.MouseEvent, packet: Packet) => void;
+    autoScroll?: boolean;
+}
+
+export interface PacketTableRef {
+    scrollToBottom: () => void;
 }
 
 type SortKey = 'timestamp' | 'index' | 'id' | 'packetName' | 'length';
 
-export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacket, onSelectPacket, onRowContextMenu }) => {
+
+export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packets, selectedPacket, onSelectPacket, onRowContextMenu, autoScroll = false }, ref) => {
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
         key: 'index',
         direction: 'asc'
@@ -64,6 +70,35 @@ export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacke
         estimateSize: () => 40,
         overscan: 5,
     });
+
+    // Expose scrollToBottom method via ref
+    useImperativeHandle(ref, () => ({
+        scrollToBottom: () => {
+            const scrollElement = parentRef.current;
+            if (scrollElement) {
+                scrollElement.scrollTop = scrollElement.scrollHeight;
+            }
+        }
+    }));
+
+    // Auto-scroll when packets change and autoScroll is enabled
+    // Use a timeout to debounce rapid updates
+    useEffect(() => {
+        if (!autoScroll || sortedPackets.length === 0) return;
+
+        const timeoutId = setTimeout(() => {
+            const scrollElement = parentRef.current;
+            if (scrollElement) {
+                // Scroll to bottom smoothly
+                scrollElement.scrollTo({
+                    top: scrollElement.scrollHeight,
+                    behavior: 'auto' // Use 'auto' instead of 'smooth' for better performance
+                });
+            }
+        }, 50); // Small delay to batch rapid updates
+
+        return () => clearTimeout(timeoutId);
+    }, [packets.length, autoScroll]);
 
     const handleSort = (key: SortKey) => {
         setSortConfig(current => ({
@@ -167,4 +202,6 @@ export const PacketTable: React.FC<PacketTableProps> = ({ packets, selectedPacke
             </div>
         </div>
     );
-};
+});
+
+PacketTable.displayName = 'PacketTable';

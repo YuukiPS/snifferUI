@@ -44,7 +44,16 @@ If your server sends binary packets that need protobuf decoding:
 - **Binary packets** (where `data === ""` but `binary` exists) will be decoded using the uploaded proto file
 - **JSON packets** will be displayed as-is
 
-### 4. Stop Monitoring
+### 4. Auto-Scroll Feature
+
+To automatically scroll to the latest packet when new packets arrive:
+
+1. Click the **Auto Scroll** button (Down arrow icon) in the sidebar
+2. When active, the button will turn **green** with a left border indicator
+3. The table will automatically scroll to the bottom whenever new packets arrive
+4. Click again to disable auto-scroll and manually navigate the packet list
+
+### 5. Stop Monitoring
 
 - Click the **Stop** button in the sidebar
 - The connection will close and the backend `/api/stop` endpoint will be called

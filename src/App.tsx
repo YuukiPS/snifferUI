@@ -30,6 +30,9 @@ function App() {
   const [cmdIdToMessageMap, setCmdIdToMessageMap] = useState<{ [cmdId: number]: string }>({});
   const globalPacketIndexRef = useRef(0);
 
+  // Auto-scroll state
+  const [autoScroll, setAutoScroll] = useState(false);
+
   useEffect(() => {
     const handleClick = () => {
       if (contextMenu) setContextMenu(null);
@@ -302,6 +305,8 @@ function App() {
         onStart={handleStartButton}
         isMonitoring={isMonitoring}
         onProtoClick={() => setIsProtoModalOpen(true)}
+        autoScroll={autoScroll}
+        onAutoScrollToggle={() => setAutoScroll(!autoScroll)}
       />
       <div className="main-content">
         <div className="top-bar">
@@ -325,6 +330,7 @@ function App() {
             selectedPacket={selectedPacket}
             onSelectPacket={setSelectedPacket}
             onRowContextMenu={handleRowContextMenu}
+            autoScroll={autoScroll}
           />
         ) : (
           <div className="empty-state" style={{

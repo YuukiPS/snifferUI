@@ -73,9 +73,15 @@
     color: #fff;
 }
 
-.sidebar-btn.active {
-    background-color: #3b82f6;
-    color: white;
+.sidebar-btn.scroll.active {
+    background-color: #15803d;
+    /* Green when active */
+    color: #4ade80;
+}
+
+.sidebar-btn.scroll.active:hover {
+    background-color: #16a34a;
+    color: #fff;
 }
 
 .sidebar-btn.active::before {
@@ -85,5 +91,5 @@
     top: 0;
     bottom: 0;
     width: 3px;
-    background-color: white;
+    background-color: #4ade80;
 }
