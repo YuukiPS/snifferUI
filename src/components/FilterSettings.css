@@ -108,3 +108,21 @@
     color: #ff4d4d;
     background-color: rgba(255, 77, 77, 0.1);
 }
+
+.remove-all-btn {
+    background-color: transparent;
+    border: 1px solid #ff4d4d;
+    color: #ff4d4d;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: auto;
+    margin-right: 12px;
+    transition: all 0.2s ease;
+}
+
+.remove-all-btn:hover {
+    background-color: #ff4d4d;
+    color: white;
+}

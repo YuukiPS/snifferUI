@@ -15,7 +15,10 @@ function App() {
   const [packets, setPackets] = useState<Packet[]>([]);
   const [selectedPacket, setSelectedPacket] = useState<Packet | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [hiddenNames, setHiddenNames] = useState<string[]>([]);
+  const [hiddenNames, setHiddenNames] = useState<string[]>(() => {
+    const saved = localStorage.getItem('packet_monitor_hidden_names');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [isFilterSettingsOpen, setIsFilterSettingsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'name' | 'data', packet: Packet } | null>(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -57,6 +60,11 @@ function App() {
       rebuildFromProto(savedProto);
     }
   }, []);
+
+  // Persist hiddenNames
+  useEffect(() => {
+    localStorage.setItem('packet_monitor_hidden_names', JSON.stringify(hiddenNames));
+  }, [hiddenNames]);
 
   const rebuildFromProto = (protoText: string): { success: boolean; mappingCount: number; error?: string } => {
     try {
@@ -214,6 +222,10 @@ function App() {
 
   const handleUnhidePacketName = (name: string) => {
     setHiddenNames(prev => prev.filter(n => n !== name));
+  };
+
+  const handleUnhideAll = () => {
+    setHiddenNames([]);
   };
 
   const handleClear = () => {
@@ -480,6 +492,7 @@ function App() {
         <FilterSettings
           hiddenNames={hiddenNames}
           onUnhide={handleUnhidePacketName}
+          onUnhideAll={handleUnhideAll}
           onClose={() => setIsFilterSettingsOpen(false)}
         />
       )}

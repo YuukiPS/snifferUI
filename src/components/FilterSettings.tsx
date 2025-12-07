@@ -4,15 +4,21 @@ import './FilterSettings.css';
 interface FilterSettingsProps {
     hiddenNames: string[];
     onUnhide: (name: string) => void;
+    onUnhideAll: () => void;
     onClose: () => void;
 }
 
-export const FilterSettings: React.FC<FilterSettingsProps> = ({ hiddenNames, onUnhide, onClose }) => {
+export const FilterSettings: React.FC<FilterSettingsProps> = ({ hiddenNames, onUnhide, onUnhideAll, onClose }) => {
     return (
         <div className="filter-settings-overlay" onClick={onClose}>
             <div className="filter-settings-modal" onClick={e => e.stopPropagation()}>
                 <div className="filter-settings-header">
                     <h3>Filter Settings</h3>
+                    {hiddenNames.length > 0 && (
+                        <button className="remove-all-btn" onClick={onUnhideAll}>
+                            Remove All
+                        </button>
+                    )}
                     <button className="close-btn" onClick={onClose}>×</button>
                 </div>
                 <div className="filter-settings-content">
