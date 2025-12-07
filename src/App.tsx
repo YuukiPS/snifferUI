@@ -17,7 +17,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [hiddenNames, setHiddenNames] = useState<string[]>([]);
   const [isFilterSettingsOpen, setIsFilterSettingsOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, packetName: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'name' | 'data', packet: Packet } | null>(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -171,13 +171,38 @@ function App() {
     return result;
   }, [packets, searchTerm, hiddenNames]);
 
-  const handleRowContextMenu = (event: React.MouseEvent, packet: Packet) => {
+  const handleRowContextMenu = (event: React.MouseEvent, packet: Packet, type: 'name' | 'data') => {
     event.preventDefault(); // Prevent native context menu just in case, though PacketTable handles it
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
-      packetName: packet.packetName
+      type,
+      packet
     });
+  };
+
+  const handleCopyJson = (packet: Packet) => {
+    navigator.clipboard.writeText(packet.data);
+    setContextMenu(null);
+  };
+
+  const handleCopyBinary = (packet: Packet) => {
+    if (packet.binary) {
+      navigator.clipboard.writeText(packet.binary);
+    } else {
+      alert("No binary data available for this packet.");
+    }
+    setContextMenu(null);
+  };
+
+  const handleCopyName = (packet: Packet) => {
+    navigator.clipboard.writeText(packet.packetName);
+    setContextMenu(null);
+  };
+
+  const handleCopyId = (packet: Packet) => {
+    navigator.clipboard.writeText(packet.id.toString());
+    setContextMenu(null);
   };
 
   const handleHidePacketName = (name: string) => {
@@ -416,12 +441,38 @@ function App() {
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div
-            className="context-menu-item"
-            onClick={() => handleHidePacketName(contextMenu.packetName)}
-          >
-            Hide "{contextMenu.packetName}"
-          </div>
+          {contextMenu.type === 'name' && (
+            <>
+              <div
+                className="context-menu-item"
+                onClick={() => handleHidePacketName(contextMenu.packet.packetName)}
+              >
+                Hide "{contextMenu.packet.packetName}"
+              </div>
+              <div
+                className="context-menu-item"
+                onClick={() => handleCopyName(contextMenu.packet)}
+              >
+                Copy as Name
+              </div>
+              <div
+                className="context-menu-item"
+                onClick={() => handleCopyId(contextMenu.packet)}
+              >
+                Copy as CmdId
+              </div>
+            </>
+          )}
+          {contextMenu.type === 'data' && (
+            <>
+              <div className="context-menu-item" onClick={() => handleCopyJson(contextMenu.packet)}>
+                Copy as Json
+              </div>
+              <div className="context-menu-item" onClick={() => handleCopyBinary(contextMenu.packet)}>
+                Copy as Binary (Base64)
+              </div>
+            </>
+          )}
         </div>
       )}
 

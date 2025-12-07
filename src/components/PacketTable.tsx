@@ -7,7 +7,7 @@ interface PacketTableProps {
     packets: Packet[];
     selectedPacket: Packet | null;
     onSelectPacket: (packet: Packet) => void;
-    onRowContextMenu: (event: React.MouseEvent, packet: Packet) => void;
+    onRowContextMenu: (event: React.MouseEvent, packet: Packet, type: 'name' | 'data') => void;
     autoScroll?: boolean;
 }
 
@@ -118,7 +118,12 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
 
     const handleNameContextMenu = (e: React.MouseEvent, packet: Packet) => {
         e.preventDefault();
-        onRowContextMenu(e, packet);
+        onRowContextMenu(e, packet, 'name');
+    };
+
+    const handleDataContextMenu = (e: React.MouseEvent, packet: Packet) => {
+        e.preventDefault();
+        onRowContextMenu(e, packet, 'data');
     };
 
     return (
@@ -206,7 +211,11 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                                 <div className="virtual-cell text-right font-mono text-sm" style={{ width: '80px' }}>
                                     {packet.length}
                                 </div>
-                                <div className="virtual-cell font-mono text-xs" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <div
+                                    className="virtual-cell font-mono text-xs"
+                                    style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'context-menu' }}
+                                    onContextMenu={(e) => handleDataContextMenu(e, packet)}
+                                >
                                     {typeof packet.data === 'string' ? packet.data : JSON.stringify(packet.data)}
                                 </div>
                             </div>
