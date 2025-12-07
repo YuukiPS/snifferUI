@@ -15,7 +15,7 @@ export interface PacketTableRef {
     scrollToBottom: () => void;
 }
 
-type SortKey = 'timestamp' | 'index' | 'id' | 'packetName' | 'length';
+type SortKey = 'timestamp' | 'index' | 'id' | 'packetName' | 'length' | 'dataSource';
 
 
 export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packets, selectedPacket, onSelectPacket, onRowContextMenu, autoScroll = false }, ref) => {
@@ -52,6 +52,10 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                 case 'timestamp':
                     aValue = a.timestamp;
                     bValue = b.timestamp;
+                    break;
+                case 'dataSource':
+                    aValue = a.dataSource || '';
+                    bValue = b.dataSource || '';
                     break;
                 default:
                     return 0;
@@ -130,6 +134,9 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                     <div className="header-cell" style={{ width: '100px' }}>
                         Source
                     </div>
+                    <div className="header-cell" style={{ width: '80px' }} onClick={() => handleSort('dataSource')}>
+                        Data Src{getSortIndicator('dataSource')}
+                    </div>
                     <div className="header-cell" style={{ width: '80px' }} onClick={() => handleSort('id')}>
                         ID{getSortIndicator('id')}
                     </div>
@@ -178,6 +185,13 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                                     <span className={`source-badge ${packet.source.toLowerCase()}`}>
                                         {packet.source}
                                     </span>
+                                </div>
+                                <div className="virtual-cell text-center" style={{ width: '80px' }}>
+                                    {packet.dataSource && (
+                                        <span className={`source-badge ${(packet.dataSource || '').toLowerCase()}`}>
+                                            {packet.dataSource}
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="virtual-cell text-right font-mono text-sm" style={{ width: '80px' }}>
                                     {packet.id}

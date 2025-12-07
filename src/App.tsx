@@ -94,14 +94,35 @@ function App() {
   const handleUpload = (data: any[]): { success: boolean; packetCount: number; error?: string } => {
     try {
       const mappedPackets: Packet[] = data.map((item: any, index: number) => {
-        let parsedData = item.data;
-        if (typeof item.data === 'string') {
+        let parsedData = "";
+        let dataSource: 'BINARY' | 'JSON' = 'JSON';
+
+        // Try decoding binary first if available
+        let decoded = false;
+        if (item.binary) {
           try {
-            parsedData = JSON.parse(item.data);
+            const protoName = item.packetName || cmdIdToMessageMap[item.packetId];
+            if (protoName) {
+              const buffer = Uint8Array.from(atob(item.binary), c => c.charCodeAt(0));
+              const Message = protoRootRef.current.lookupType(protoName);
+              const decodedMessage = Message.decode(buffer).toJSON();
+              parsedData = JSON.stringify(decodedMessage);
+              dataSource = 'BINARY';
+              decoded = true;
+            }
           } catch (e) {
-            console.error('Failed to parse inner data JSON for packet', item.packetId, e);
-            parsedData = item.data; // Fallback to string
+            console.warn(`Failed to decode binary for packet ${item.packetId}, falling back to JSON`, e);
           }
+        }
+
+        // If binary decoding failed or wasn't possible, use item.data
+        if (!decoded && item.data) {
+          if (typeof item.data === 'string') {
+            parsedData = item.data;
+          } else {
+            parsedData = JSON.stringify(item.data);
+          }
+          dataSource = 'JSON';
         }
 
         return {
@@ -111,7 +132,9 @@ function App() {
           packetName: item.packetName,
           length: item.length,
           index: index,
-          data: parsedData
+          data: parsedData,
+          binary: item.binary,
+          dataSource: dataSource
         };
       });
       setPackets(mappedPackets);
@@ -208,60 +231,52 @@ function App() {
           const packetData = JSON.parse(e.data);
           const currentIndex = globalPacketIndexRef.current++;
 
-          // Check if data is empty but binary exists - decode with proto
-          if (packetData.data === "" && packetData.binary) {
-            const protoName = cmdIdToMessageMap[packetData.packetId];
+          // Logic: Prioritize Binary -> Proto Decode. Fallback -> JSON data.
+          let finalDataStr = "";
+          let finalSource: 'BINARY' | 'JSON' = 'JSON';
+          let decodedSuccess = false;
 
-            if (!protoName) {
-              console.warn(`No proto mapping for packetId ${packetData.packetId}`);
-              return;
-            }
+          const protoName = cmdIdToMessageMap[packetData.packetId] || packetData.packetName;
 
+          if (packetData.binary && protoName) {
             try {
               // Decode binary using protobuf
               const buffer = Uint8Array.from(atob(packetData.binary), c => c.charCodeAt(0));
               const Message = protoRootRef.current.lookupType(protoName);
               const decodedMessage = Message.decode(buffer).toJSON();
-
-              const newPacket: Packet = {
-                timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
-                source: (packetData.source?.toUpperCase() === 'CLIENT' ? 'CLIENT' : 'SERVER'),
-                id: packetData.packetId,
-                packetName: protoName,
-                length: packetData.length || buffer.length,
-                index: currentIndex,
-                data: decodedMessage
-              };
-
-              setPackets(prev => [...prev, newPacket]);
+              finalDataStr = JSON.stringify(decodedMessage);
+              finalSource = 'BINARY';
+              decodedSuccess = true;
             } catch (error) {
-              console.error("Error decoding proto:", error);
+              console.error("Proto decode failed:", error);
             }
-          } else {
-            // Handle regular JSON data
-            let parsedOuterData = packetData.data;
-            if (typeof packetData.data === 'string' && packetData.data.trim()) {
-              if (packetData.data.trim().startsWith('{') || packetData.data.trim().startsWith('[')) {
-                try {
-                  parsedOuterData = JSON.parse(packetData.data);
-                } catch {
-                  // keep as string
-                }
-              }
-            }
-
-            const newPacket: Packet = {
-              timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
-              source: (packetData.source?.toUpperCase() === 'CLIENT' ? 'CLIENT' : 'SERVER'),
-              id: packetData.packetId || 0,
-              packetName: packetData.packetName || 'Unknown',
-              length: packetData.length || 0,
-              index: currentIndex,
-              data: parsedOuterData
-            };
-
-            setPackets(prev => [...prev, newPacket]);
           }
+
+          if (!decodedSuccess) {
+            // Fallback to JSON data
+            if (packetData.data) {
+              if (typeof packetData.data === 'string') {
+                finalDataStr = packetData.data;
+              } else {
+                finalDataStr = JSON.stringify(packetData.data);
+              }
+              finalSource = 'JSON';
+            }
+          }
+
+          const newPacket: Packet = {
+            timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
+            source: (packetData.source?.toUpperCase() === 'CLIENT' ? 'CLIENT' : 'SERVER'),
+            id: packetData.packetId,
+            packetName: protoName || 'Unknown',
+            length: packetData.length || (packetData.binary ? packetData.binary.length : 0),
+            index: currentIndex,
+            data: finalDataStr,
+            binary: packetData.binary,
+            dataSource: finalSource
+          };
+
+          setPackets(prev => [...prev, newPacket]);
 
         } catch (err) {
           console.error("Error parsing stream packet:", err);

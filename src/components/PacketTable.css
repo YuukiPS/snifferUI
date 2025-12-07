@@ -92,6 +92,14 @@
     background-color: var(--accent-secondary);
 }
 
+.source-badge.binary {
+    background-color: #2196F3;
+}
+
+.source-badge.json {
+    background-color: #FF9800;
+}
+
 .text-right {
     text-align: right;
 }

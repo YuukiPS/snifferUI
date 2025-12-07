@@ -127,3 +127,118 @@
 .json-null {
     color: #569cd6;
 }
+
+/* --- View Container --- */
+.view-container {
+    padding: 0;
+    height: calc(100% - 35px);
+    /* Adjust based on meta-info height */
+    overflow: auto;
+}
+
+/* --- Tree View Styles --- */
+.json-tree-container {
+    padding: 10px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    color: #d4d4d4;
+    user-select: text;
+}
+
+.tree-line {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    min-height: 1.5em;
+    /* Ensure empty lines have height */
+}
+
+.tree-line:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.tree-toggler {
+    user-select: none;
+    color: #858585;
+    font-size: 10px;
+    line-height: 1.8;
+}
+
+.tree-toggler:hover {
+    color: #fff;
+}
+
+.json-bracket {
+    color: #da70d6;
+    /* Orchid/Purpleish */
+    font-weight: bold;
+}
+
+.json-comma {
+    color: #d4d4d4;
+}
+
+.collapsed-indicator {
+    color: #808080;
+    margin: 0 4px;
+    font-size: 12px;
+}
+
+/* --- Table View Styles --- */
+.table-wrapper {
+    padding: 10px;
+    overflow-x: auto;
+}
+
+.json-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: #d4d4d4;
+}
+
+.json-table th,
+.json-table td {
+    border: 1px solid #333;
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.json-table th {
+    background-color: #252526;
+    color: #fff;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+
+.json-table tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.json-table tr:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.key-cell {
+    color: #9cdcfe;
+    font-weight: 500;
+}
+
+.table-message {
+    padding: 20px;
+    text-align: center;
+    color: #888;
+    font-family: var(--font-mono);
+}
+
+.error-msg {
+    padding: 20px;
+    color: #f48771;
+    /* Error red */
+    font-family: var(--font-mono);
+    text-align: center;
+}
