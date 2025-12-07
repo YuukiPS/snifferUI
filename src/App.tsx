@@ -37,6 +37,10 @@ function App() {
   // Auto-scroll state
   const [autoScroll, setAutoScroll] = useState(false);
 
+  // Resize state
+  const [packetDetailWidth, setPacketDetailWidth] = useState(400);
+  const [isResizing, setIsResizing] = useState(false);
+
   useEffect(() => {
     const handleClick = () => {
       if (contextMenu) setContextMenu(null);
@@ -333,7 +337,15 @@ function App() {
   };
 
   return (
-    <div className="app-container">
+    <div className="app-container" style={{ userSelect: isResizing ? 'none' : 'auto', cursor: isResizing ? 'col-resize' : 'default' }} onMouseMove={(e) => {
+      if (isResizing) {
+        const newWidth = window.innerWidth - e.clientX;
+        // Clamp width
+        if (newWidth > 300 && newWidth < window.innerWidth - 300) {
+          setPacketDetailWidth(newWidth);
+        }
+      }
+    }} onMouseUp={() => setIsResizing(false)} onMouseLeave={() => setIsResizing(false)}>
       <Sidebar
         onFilterClick={() => setIsFilterSettingsOpen(true)}
         onClear={handleClear}
@@ -346,7 +358,7 @@ function App() {
         onAutoScrollToggle={() => setAutoScroll(!autoScroll)}
         onSave={handleSave}
       />
-      <div className="main-content">
+      <div className="main-content" style={{ flex: 1, marginRight: 0 }}>
         <div className="top-bar">
           <svg className="search-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
           <div className="search-group">
@@ -358,8 +370,6 @@ function App() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button className="filter-btn">AND</button>
-          <button className="filter-btn" style={{ backgroundColor: '#333' }}>OR</button>
         </div>
 
         {packets.length > 0 ? (
@@ -384,7 +394,21 @@ function App() {
           </div>
         )}
       </div>
-      <PacketDetail packet={selectedPacket} />
+
+      <div
+        className="resizer"
+        onMouseDown={() => setIsResizing(true)}
+        style={{
+          width: '4px',
+          cursor: 'col-resize',
+          backgroundColor: isResizing ? '#007acc' : 'transparent',
+          zIndex: 10
+        }}
+      />
+
+      <div style={{ width: packetDetailWidth, minWidth: '300px', display: 'flex', flexDirection: 'column' }}>
+        <PacketDetail packet={selectedPacket} />
+      </div>
 
       {contextMenu && (
         <div

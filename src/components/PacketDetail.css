@@ -1,7 +1,7 @@
 .packet-detail {
-    width: 400px;
+    width: 100%;
     /* Default width */
-    min-width: 300px;
+    min-width: 0;
     background-color: var(--bg-tertiary);
     border-left: 1px solid var(--border-color);
     display: flex;
@@ -241,6 +241,8 @@
     flex-wrap: wrap;
     min-height: 1.5em;
     /* Ensure empty lines have height */
+    word-break: break-all;
+    white-space: pre-wrap;
 }
 
 .tree-line:hover {
@@ -294,6 +296,8 @@
     padding: 6px 8px;
     text-align: left;
     vertical-align: top;
+    word-break: break-all;
+    white-space: pre-wrap;
 }
 
 .json-table th {
@@ -346,7 +350,8 @@
 
 .code-line-row {
     display: flex;
-    white-space: pre;
+    white-space: pre-wrap;
+    word-break: break-all;
     /* Keep text structure */
 }
 
