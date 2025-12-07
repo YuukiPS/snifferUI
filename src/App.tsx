@@ -8,6 +8,7 @@ import { FilterSettings } from './components/FilterSettings';
 import { ServerModal } from './components/ServerModal';
 import { ProtoUploadModal } from './components/ProtoUploadModal';
 import { JsonUploadModal } from './components/JsonUploadModal';
+import { PcapUploadModal } from './components/PcapUploadModal';
 import type { Packet } from './types';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
   const [isServerModalOpen, setIsServerModalOpen] = useState(false);
   const [isProtoModalOpen, setIsProtoModalOpen] = useState(false);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
+  const [isPcapModalOpen, setIsPcapModalOpen] = useState(false);
   const [serverAddress, setServerAddress] = useState(() => {
     return localStorage.getItem('packet_monitor_server_address') || "http://localhost:1985";
   });
@@ -311,6 +313,7 @@ function App() {
         isMonitoring={isMonitoring}
         onProtoClick={() => setIsProtoModalOpen(true)}
         onJsonClick={() => setIsJsonModalOpen(true)}
+        onPcapClick={() => setIsPcapModalOpen(true)}
         autoScroll={autoScroll}
         onAutoScrollToggle={() => setAutoScroll(!autoScroll)}
       />
@@ -394,6 +397,13 @@ function App() {
         isOpen={isJsonModalOpen}
         onClose={() => setIsJsonModalOpen(false)}
         onJsonUploaded={handleUpload}
+      />
+
+      <PcapUploadModal
+        isOpen={isPcapModalOpen}
+        onClose={() => setIsPcapModalOpen(false)}
+        serverAddress={serverAddress}
+        isMonitoring={isMonitoring}
       />
     </div>
   );

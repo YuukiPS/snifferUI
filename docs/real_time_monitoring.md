@@ -6,6 +6,9 @@ This application supports real-time packet monitoring via Server-Sent Events (SS
 
 - **Real-time Streaming**: Connect to a backend server to receive packets in real-time
 - **Binary Packet Decoding**: Upload `.proto` files to decode binary packet data
+- **PCAP File Upload**: Upload packet capture files to the server for processing
+- **JSON File Import**: Load previously saved packet data
+- **Drag & Drop Support**: All file uploads support drag-and-drop
 - **Persistent Configuration**: Server address and proto files are saved to localStorage
 - **Dual Data Support**: Handles both JSON and binary protobuf packets
 
@@ -23,8 +26,13 @@ This application supports real-time packet monitoring via Server-Sent Events (SS
 If your server sends binary packets that need protobuf decoding:
 
 1. Click the **Book** icon in the sidebar (Proto Upload button)
-2. Select your `.proto` file
-3. The proto file will be saved to localStorage and used for all future sessions
+2. **Drag & drop** one or more `.proto` files, or click to select
+3. Files are validated and combined automatically
+4. A result popup shows:
+   - Number of proto files successfully built
+   - Number of cmdId mappings found
+   - Any errors encountered
+5. The proto files will be saved to localStorage and used for all future sessions
 
 **Proto File Format Requirements:**
 - Must contain CmdId comments before message definitions
@@ -37,14 +45,45 @@ If your server sends binary packets that need protobuf decoding:
   }
   ```
 
-### 3. During Monitoring
+### 3. Upload PCAP File (Optional)
+
+To upload packet capture files to the server for processing:
+
+**⚠️ Important: Real-time monitoring must be active before uploading PCAP files!**
+
+1. **Start monitoring first** by clicking the Play button and connecting to the server
+2. Click the **PCAP** icon in the sidebar (File icon)
+3. **Drag & drop** one or more PCAP files, or click to select
+4. Supported formats: `.gcap`, `.pcap`, `.pcapng`
+5. Files are uploaded to the server's `/api/upload` endpoint
+6. A result popup shows:
+   - Number of PCAP files successfully uploaded
+   - Any upload errors
+7. The server will process the PCAP files and stream packets via the active SSE connection
+
+**Note:** If you try to upload without monitoring active, you'll see a warning message. The PCAP packets will be sent through the `packetNotify` event stream, so the connection must be established first.
+
+### 4. Upload JSON File (Optional)
+
+To load previously saved packet data:
+
+1. Click the **Upload** icon in the sidebar (Upload arrow)
+2. **Drag & drop** one or more `.json` files, or click to select
+3. Files are validated as JSON arrays
+4. A result popup shows:
+   - Number of JSON files successfully loaded
+   - Number of packets imported
+   - Any parsing errors
+5. Multiple JSON files are combined into a single packet list
+
+### 5. During Monitoring
 
 - The Play button will change to a **Stop** button (Red square)
 - Packets streamed from the server will automatically appear in the packet table
 - **Binary packets** (where `data === ""` but `binary` exists) will be decoded using the uploaded proto file
 - **JSON packets** will be displayed as-is
 
-### 4. Auto-Scroll Feature
+### 6. Auto-Scroll Feature
 
 To automatically scroll to the latest packet when new packets arrive:
 
@@ -53,7 +92,7 @@ To automatically scroll to the latest packet when new packets arrive:
 3. The table will automatically scroll to the bottom whenever new packets arrive
 4. Click again to disable auto-scroll and manually navigate the packet list
 
-### 5. Stop Monitoring
+### 7. Stop Monitoring
 
 - Click the **Stop** button in the sidebar
 - The connection will close and the backend `/api/stop` endpoint will be called
@@ -69,6 +108,7 @@ To automatically scroll to the latest packet when new packets arrive:
 - `GET /api/stream`: The SSE stream endpoint that sends `packetNotify` events
 - `GET /api/start`: Signal to backend to start packet capture
 - `GET /api/stop`: Signal to backend to stop packet capture
+- `POST /api/upload`: Upload PCAP files (.gcap, .pcap, .pcapng) for server-side processing
 
 ### Packet Format
 
@@ -110,6 +150,13 @@ data: {
 2. When a packet has JSON data:
    - Parse and display directly
 
+### PCAP Upload
+
+PCAP files are uploaded to the server using multipart/form-data:
+- Files are sent to `POST /api/upload`
+- Server processes the PCAP and streams packets via `/api/stream`
+- Supports multiple file formats: `.gcap`, `.pcap`, `.pcapng`
+
 ### LocalStorage Keys
 
 - `packet_monitor_server_address`: Stores the last connected server address
@@ -124,8 +171,8 @@ data: {
 
 1. **Start your backend server** on `http://localhost:1985`
 2. **Upload a proto file** if your server sends binary packets
-3. **Click Play** and confirm the server address
-4. **Watch packets** appear in real-time
+3. **Upload a PCAP file** or **Click Play** to start real-time monitoring
+4. **Watch packets** appear in the table
 5. **Click Stop** when done
 
 ## Troubleshooting
@@ -134,3 +181,4 @@ data: {
 - **"Failed to start backend capture"**: Ensure your server is running and accessible
 - **"Connection lost"**: Check your server logs and network connection
 - **Proto parsing errors**: Verify your proto file syntax and CmdId comments
+- **PCAP upload fails**: Check server logs and ensure `/api/upload` endpoint is implemented
