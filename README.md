@@ -29,7 +29,7 @@ A modern, web-based dashboard for inspecting and monitoring network packets. Bui
 1. Clone the repository:
    ```bash
    git clone <repository-url>
-   cd monitor
+   cd snifferUI_Better
    ```
 
 2. Install dependencies:
@@ -54,7 +54,7 @@ The application will be available at `http://localhost:5173`.
 ## 📂 Project Structure
 
 ```
-monitor/
+snifferUI_Better/
 ├── src/
 │   ├── components/      # Reusable UI components (PacketTable, PacketDetail, etc.)
 │   ├── types/           # TypeScript interfaces and type definitions
