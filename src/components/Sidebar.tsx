@@ -10,9 +10,10 @@ interface SidebarProps {
     onPcapClick: () => void;
     autoScroll: boolean;
     onAutoScrollToggle: () => void;
+    onSave: () => void;
 }
 
-export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, onProtoClick, onJsonClick, onPcapClick, autoScroll, onAutoScrollToggle }: SidebarProps) => {
+export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, onProtoClick, onJsonClick, onPcapClick, autoScroll, onAutoScrollToggle, onSave }: SidebarProps) => {
 
 
     return (
@@ -54,7 +55,7 @@ export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, onProto
                 >
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" /></svg>
                 </button>
-                <button className="sidebar-btn" title="Save">
+                <button className="sidebar-btn" title="Save" onClick={onSave}>
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" /></svg>
                 </button>
             </div>

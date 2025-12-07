@@ -304,6 +304,19 @@ function App() {
     return rebuildFromProto(protoText);
   };
 
+  const handleSave = () => {
+    const jsonString = JSON.stringify(packets, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `packets_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="app-container">
       <Sidebar
@@ -316,6 +329,7 @@ function App() {
         onPcapClick={() => setIsPcapModalOpen(true)}
         autoScroll={autoScroll}
         onAutoScrollToggle={() => setAutoScroll(!autoScroll)}
+        onSave={handleSave}
       />
       <div className="main-content">
         <div className="top-bar">
