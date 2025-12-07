@@ -32,6 +32,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    flex-wrap: nowrap;
 }
 
 .toolbar-btn {
@@ -61,14 +62,102 @@
     margin: 0 4px;
 }
 
-.search-input {
+.search-box {
+    display: flex;
+    align-items: center;
     background-color: #3c3c3c;
-    border: 1px solid #3c3c3c;
-    color: #fff;
-    padding: 2px 4px;
-    font-size: 12px;
-    border-radius: 2px;
+    border: 1px solid #555;
+    border-radius: 3px;
+    margin-left: 8px;
     flex: 1;
+    max-width: 300px;
+}
+
+.search-input-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.search-input {
+    background-color: transparent;
+    border: none;
+    color: #fff;
+    padding: 2px 6px;
+    font-size: 12px;
+    width: 100%;
+    outline: none;
+}
+
+.search-count {
+    color: #aaa;
+    font-size: 11px;
+    padding: 0 6px;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.search-controls {
+    display: flex;
+    border-left: 1px solid #555;
+}
+
+.search-nav-btn {
+    background: none;
+    border: none;
+    border-left: 1px solid transparent;
+    color: #ccc;
+    cursor: pointer;
+    padding: 0 6px;
+    font-size: 10px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-nav-btn:hover:not(:disabled) {
+    background-color: #555;
+    color: #fff;
+}
+
+.search-nav-btn:disabled {
+    color: #666;
+    cursor: default;
+}
+
+.search-nav-btn.close {
+    font-size: 14px;
+    padding: 0 6px;
+}
+
+.search-nav-btn.close:hover {
+    background-color: #c42b1c;
+}
+
+/* --- Search Highlights --- */
+.search-match {
+    background-color: #5f4b32;
+    color: #ffcc80;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+.search-match.current {
+    background-color: #ea5e00;
+    color: #ffffff;
+    font-weight: bold;
+    outline: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.active-match-line {
+    background-color: rgba(234, 94, 0, 0.15);
+}
+
+/* Ensure tree container handles absolute positioning or specific scrolling if needed */
+.json-tree-container {
+    position: relative;
 }
 
 .detail-content {
@@ -241,4 +330,53 @@
     /* Error red */
     font-family: var(--font-mono);
     text-align: center;
+}
+
+/* --- Text View Styles (Refined) --- */
+.json-text-view {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    overflow-x: auto;
+    /* Allow horizontal scroll */
+    height: 100%;
+}
+
+.code-line-row {
+    display: flex;
+    white-space: pre;
+    /* Keep text structure */
+}
+
+/* Line Number Gutter */
+.line-number {
+    user-select: none;
+    text-align: right;
+    width: 3rem;
+    /* Fixed width gutter */
+    min-width: 3rem;
+    padding-right: 12px;
+    color: #858585;
+    /* VSCode gutter color */
+    background-color: #1e1e1e;
+    border-right: 1px solid #333;
+    /* Optional border */
+}
+
+/* Content Area */
+.code-content {
+    flex: 1;
+    padding-left: 8px;
+    /* Gap from gutter */
+}
+
+.code-line-row:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.code-line-row:hover .line-number {
+    color: #c6c6c6;
+    /* Highlight gutter on hover */
 }
