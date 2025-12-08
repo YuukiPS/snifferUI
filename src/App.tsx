@@ -35,6 +35,12 @@ function App() {
   // Proto-related state
   const protoRootRef = useRef<protobuf.Root>(new protobuf.Root());
   const [cmdIdToMessageMap, setCmdIdToMessageMap] = useState<{ [cmdId: number]: string }>({});
+  const cmdIdToMessageMapRef = useRef<{ [cmdId: number]: string }>({});
+
+  useEffect(() => {
+    cmdIdToMessageMapRef.current = cmdIdToMessageMap;
+  }, [cmdIdToMessageMap]);
+
   const globalPacketIndexRef = useRef(0);
 
   // Auto-scroll state
@@ -98,6 +104,51 @@ function App() {
     }
 
     setCmdIdToMessageMap(newMap);
+
+    // Rebuild existing packets with new proto definitions
+    if (packets.length > 0) {
+      const updatedPackets = packets.map(packet => {
+        const protoName = newMap[packet.id];
+
+        // If we have a matching message in the new proto and binary data, try to decode
+        if (protoName && packet.binary) {
+          try {
+            const buffer = Uint8Array.from(atob(packet.binary), c => c.charCodeAt(0));
+            // protoRootRef.current is already updated with the new proto
+            const Message = protoRootRef.current.lookupType(protoName); // Note: Type lookup might throw if not found, but we have protoName from newMap which was derived from keys?
+            // Wait, newMap contains names. protoRootRef.current might not contain the type if the map parsing logic is simpler than the full proto parse logic 
+            // but here we used protobuf.parse first, so protoRootRef should be valid.
+            
+            const decodedMessage = Message.decode(buffer).toJSON();
+
+            return {
+              ...packet,
+              packetName: protoName,
+              data: JSON.stringify(decodedMessage),
+              dataSource: 'BINARY'
+            };
+          } catch (e) {
+            console.warn(`Failed to re-decode packet ${packet.id} (${protoName}):`, e);
+            // If decode fails, keep original packet data but update name if possible
+            return {
+              ...packet,
+              packetName: protoName
+            };
+          }
+        } else if (protoName) {
+          // Update name even if no binary or decode not needed
+          return {
+            ...packet,
+            packetName: protoName
+          };
+        }
+
+        return packet;
+      });
+
+      setPackets(updatedPackets as Packet[]);
+    }
+
     const mappingCount = Object.keys(newMap).length;
     console.log(`Proto processed with ${mappingCount} cmdId mappings.`);
     return { success: true, mappingCount };
@@ -277,7 +328,7 @@ function App() {
           let finalSource: 'BINARY' | 'JSON' = 'JSON';
           let decodedSuccess = false;
 
-          const protoName = cmdIdToMessageMap[packetData.packetId] || packetData.packetName;
+          const protoName = cmdIdToMessageMapRef.current[packetData.packetId] || packetData.packetName;
 
           if (packetData.binary && protoName) {
             try {
