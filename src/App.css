@@ -43,6 +43,25 @@
   margin-right: 5px;
 }
 
+.search-scope-select {
+  background: transparent;
+  color: #ccc;
+  border: none;
+  margin-right: 8px;
+  outline: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 0;
+  font-family: inherit;
+  border-right: 1px solid #555; /* Separator */
+  padding-right: 8px;
+}
+
+.search-scope-select option {
+  background-color: #3c3c3c;
+  color: #fff;
+}
+
 .search-input-main {
   background: transparent;
   border: none;

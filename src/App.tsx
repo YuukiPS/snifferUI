@@ -15,6 +15,7 @@ function App() {
   const [packets, setPackets] = useState<Packet[]>([]);
   const [selectedPacket, setSelectedPacket] = useState<Packet | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchScope, setSearchScope] = useState<'ALL' | 'NAME' | 'ID' | 'SEQ' | 'CONTENT'>('ALL');
   const [hiddenNames, setHiddenNames] = useState<string[]>(() => {
     const saved = localStorage.getItem('packet_monitor_hidden_names');
     return saved ? JSON.parse(saved) : [];
@@ -220,11 +221,25 @@ function App() {
     // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      result = result.filter(p =>
-        p.packetName.toLowerCase().includes(term) ||
-        p.id.toString().includes(term) ||
-        JSON.stringify(p.data).toLowerCase().includes(term)
-      );
+      result = result.filter(p => {
+        if (searchScope === 'ALL') {
+          return (
+            p.packetName.toLowerCase().includes(term) ||
+            p.id.toString().includes(term) ||
+            p.index.toString().includes(term) ||
+            (typeof p.data === 'string' ? p.data : JSON.stringify(p.data)).toLowerCase().includes(term)
+          );
+        } else if (searchScope === 'NAME') {
+          return p.packetName.toLowerCase().includes(term);
+        } else if (searchScope === 'ID') {
+          return p.id.toString().includes(term);
+        } else if (searchScope === 'SEQ') {
+          return p.index.toString().includes(term);
+        } else if (searchScope === 'CONTENT') {
+          return (typeof p.data === 'string' ? p.data : JSON.stringify(p.data)).toLowerCase().includes(term);
+        }
+        return false;
+      });
     }
 
     return result;
@@ -450,9 +465,20 @@ function App() {
         <div className="top-bar">
           <svg className="search-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
           <div className="search-group">
+            <select
+              value={searchScope}
+              onChange={(e) => setSearchScope(e.target.value as any)}
+              className="search-scope-select"
+            >
+              <option value="ALL">All</option>
+              <option value="NAME">Name</option>
+              <option value="ID">ID</option>
+              <option value="SEQ">Seq</option>
+              <option value="CONTENT">Content</option>
+            </select>
             <input
               type="text"
-              placeholder="Search Name, ID, JSON..."
+              placeholder={`Search ${searchScope === 'ALL' ? 'Name, ID, Seq, Content' : searchScope}...`}
               className="search-input-main"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
