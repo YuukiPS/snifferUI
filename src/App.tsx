@@ -44,8 +44,10 @@ function App() {
 
   const globalPacketIndexRef = useRef(0);
 
-  // Auto-scroll state
-  const [autoScroll, setAutoScroll] = useState(false);
+  // Auto-scroll state (persisted)
+  const [autoScroll, setAutoScroll] = useState(() => {
+    return localStorage.getItem('packet_monitor_auto_scroll') === 'true';
+  });
 
   // Resize state
   const [packetDetailWidth, setPacketDetailWidth] = useState(400);
@@ -58,6 +60,28 @@ function App() {
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
   }, [contextMenu]);
+
+  // Check server status on mount
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const baseUrl = serverAddress.replace(/\/$/, "");
+        const res = await fetch(`${baseUrl}/api/status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.is_running) {
+            console.log("Server is running, resuming monitoring...");
+            startMonitoring(baseUrl);
+          }
+        }
+      } catch (err) {
+        console.log("Server check failed (server might be down):", err);
+      }
+    };
+
+    checkStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load saved proto on mount
   useEffect(() => {
@@ -72,6 +96,11 @@ function App() {
   useEffect(() => {
     localStorage.setItem('packet_monitor_hidden_names', JSON.stringify(hiddenNames));
   }, [hiddenNames]);
+
+  // Persist autoScroll
+  useEffect(() => {
+    localStorage.setItem('packet_monitor_auto_scroll', String(autoScroll));
+  }, [autoScroll]);
 
   const rebuildFromProto = (protoText: string): { success: boolean; mappingCount: number; error?: string } => {
     try {
