@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import * as protobuf from 'protobufjs';
 import './App.css';
 import { Sidebar } from './components/Sidebar';
@@ -10,6 +10,15 @@ import { ProtoUploadModal } from './components/ProtoUploadModal';
 import { JsonUploadModal } from './components/JsonUploadModal';
 import { PcapUploadModal } from './components/PcapUploadModal';
 import type { Packet } from './types';
+import {
+  savePackets,
+  loadAllPackets,
+  clearAllPackets,
+  queuePacketSave,
+  flushWriteBuffer,
+  getStorageEstimate,
+  formatBytes,
+} from './utils/packetStorage';
 
 function App() {
   const [packets, setPackets] = useState<Packet[]>([]);
@@ -53,6 +62,20 @@ function App() {
   const [packetDetailWidth, setPacketDetailWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
 
+  // Storage stats state
+  const [storageUsage, setStorageUsage] = useState(0);
+  const [storageQuota, setStorageQuota] = useState(0);
+
+  const refreshStorageStats = useCallback(async () => {
+    try {
+      const { usage, quota } = await getStorageEstimate();
+      setStorageUsage(usage);
+      setStorageQuota(quota);
+    } catch (err) {
+      console.warn('Failed to get storage estimate:', err);
+    }
+  }, []);
+
   useEffect(() => {
     const handleClick = () => {
       if (contextMenu) setContextMenu(null);
@@ -61,9 +84,27 @@ function App() {
     return () => window.removeEventListener('click', handleClick);
   }, [contextMenu]);
 
-  // Check server status on mount
+  // Load packets from IndexedDB on mount, then check server status
   useEffect(() => {
-    const checkStatus = async () => {
+    const init = async () => {
+      // 1. Restore persisted packets
+      try {
+        const stored = await loadAllPackets();
+        if (stored.length > 0) {
+          setPackets(stored);
+          // Restore the global index counter so new packets don't collide
+          const maxIndex = stored.reduce((max, p) => Math.max(max, p.index), 0);
+          globalPacketIndexRef.current = maxIndex + 1;
+          console.log(`Restored ${stored.length} packets from IndexedDB (next index: ${globalPacketIndexRef.current})`);
+        }
+      } catch (err) {
+        console.warn('Failed to load packets from IndexedDB:', err);
+      }
+
+      // 2. Refresh storage stats
+      await refreshStorageStats();
+
+      // 3. Check server status
       try {
         const baseUrl = serverAddress.replace(/\/$/, "");
         const res = await fetch(`${baseUrl}/api/status`);
@@ -79,9 +120,15 @@ function App() {
       }
     };
 
-    checkStatus();
+    init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Periodically refresh storage stats (every 5s)
+  useEffect(() => {
+    const interval = setInterval(refreshStorageStats, 5000);
+    return () => clearInterval(interval);
+  }, [refreshStorageStats]);
 
   // Load saved proto on mount
   useEffect(() => {
@@ -177,6 +224,8 @@ function App() {
       });
 
       setPackets(updatedPackets as Packet[]);
+      // Persist re-decoded packets to IndexedDB
+      clearAllPackets().then(() => savePackets(updatedPackets as Packet[])).then(refreshStorageStats);
     }
 
     const mappingCount = Object.keys(newMap).length;
@@ -231,6 +280,9 @@ function App() {
         };
       });
       setPackets(mappedPackets);
+      // Persist uploaded packets to IndexedDB (replace old data)
+      clearAllPackets().then(() => savePackets(mappedPackets)).then(refreshStorageStats);
+      globalPacketIndexRef.current = mappedPackets.length;
       return { success: true, packetCount: mappedPackets.length };
     } catch (error) {
       console.error("Error processing uploaded data:", error);
@@ -323,9 +375,19 @@ function App() {
     setHiddenNames([]);
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     setPackets([]);
     setSelectedPacket(null);
+    globalPacketIndexRef.current = 0;
+    // Clear persisted packets from IndexedDB
+    try {
+      await flushWriteBuffer();
+      await clearAllPackets();
+      await refreshStorageStats();
+      console.log('Cleared all persisted packets from IndexedDB.');
+    } catch (err) {
+      console.error('Failed to clear IndexedDB:', err);
+    }
   };
 
   const stopMonitoring = async () => {
@@ -413,6 +475,9 @@ function App() {
           };
 
           setPackets(prev => [...prev, newPacket]);
+
+            // Persist to IndexedDB via batched write buffer
+            queuePacketSave(newPacket, refreshStorageStats);
 
         } catch (err) {
           console.error("Error parsing stream packet:", err);
@@ -512,6 +577,26 @@ function App() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+          </div>
+
+          {/* Storage Stats */}
+          <div className="storage-stats" title={`Storage: ${formatBytes(storageUsage)} / ${formatBytes(storageQuota)}`}>
+            <svg className="storage-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z" />
+            </svg>
+            <div className="storage-bar-container">
+              <div
+                className="storage-bar-fill"
+                style={{
+                  width: storageQuota > 0 ? `${Math.min((storageUsage / storageQuota) * 100, 100)}%` : '0%',
+                  backgroundColor: storageQuota > 0 && (storageUsage / storageQuota) > 0.9 ? '#f87171' :
+                                   storageQuota > 0 && (storageUsage / storageQuota) > 0.7 ? '#fbbf24' : '#4ade80',
+                }}
+              />
+            </div>
+            <span className="storage-text">
+              {formatBytes(storageUsage)} / {formatBytes(storageQuota)}
+            </span>
           </div>
         </div>
 
