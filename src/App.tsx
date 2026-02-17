@@ -607,6 +607,8 @@ function App() {
             onSelectPacket={setSelectedPacket}
             onRowContextMenu={handleRowContextMenu}
             autoScroll={autoScroll}
+            searchTerm={searchTerm}
+            filterVersion={hiddenNames.length}
           />
         ) : (
           <div className="empty-state" style={{

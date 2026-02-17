@@ -9,6 +9,8 @@ interface PacketTableProps {
     onSelectPacket: (packet: Packet) => void;
     onRowContextMenu: (event: React.MouseEvent, packet: Packet, type: 'name' | 'data') => void;
     autoScroll?: boolean;
+    searchTerm?: string;
+    filterVersion?: number;
 }
 
 export interface PacketTableRef {
@@ -18,7 +20,7 @@ export interface PacketTableRef {
 type SortKey = 'timestamp' | 'index' | 'id' | 'packetName' | 'length' | 'dataSource';
 
 
-export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packets, selectedPacket, onSelectPacket, onRowContextMenu, autoScroll = false }, ref) => {
+export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packets, selectedPacket, onSelectPacket, onRowContextMenu, autoScroll = false, searchTerm = '', filterVersion = 0 }, ref) => {
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
         key: 'index',
         direction: 'asc'
@@ -85,29 +87,26 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
         }
     }));
 
-    // Track previous packet count to detect list changes (search clear vs new packets)
-    const prevPacketCountRef = useRef(sortedPackets.length);
+    // When the search or filter changes, scroll to keep the selected packet visible
+    const prevSearchRef = useRef(searchTerm);
+    const prevFilterRef = useRef(filterVersion);
 
-    // When the filtered/sorted list changes and we have a selected packet,
-    // scroll so the selected packet stays visible (e.g., after clearing search)
     useEffect(() => {
-        const prevCount = prevPacketCountRef.current;
-        prevPacketCountRef.current = sortedPackets.length;
+        const searchChanged = prevSearchRef.current !== searchTerm;
+        const filterChanged = prevFilterRef.current !== filterVersion;
+        prevSearchRef.current = searchTerm;
+        prevFilterRef.current = filterVersion;
 
-        // Only trigger when the list size changes significantly (filter change),
-        // not on every single new packet arrival
-        if (!selectedPacket) return;
-        // If only 1 packet was added, it's likely a streaming append — skip
-        if (sortedPackets.length === prevCount + 1) return;
-        // If list grew by 0 or shrank, or grew by more than 1, it's a filter change
+        if (!selectedPacket || (!searchChanged && !filterChanged)) return;
+
         const selectedIndex = sortedPackets.findIndex(p => p.index === selectedPacket.index);
         if (selectedIndex >= 0) {
-            // Small delay to let the virtualizer recalculate
+            // Delay to let the virtualizer recalculate after the list change
             setTimeout(() => {
                 virtualizer.scrollToIndex(selectedIndex, { align: 'center', behavior: 'auto' });
-            }, 30);
+            }, 50);
         }
-    }, [sortedPackets, selectedPacket, virtualizer]);
+    }, [searchTerm, filterVersion, sortedPackets, selectedPacket, virtualizer]);
 
     // Auto-scroll when packets change and autoScroll is enabled
     // Use a timeout to debounce rapid updates
