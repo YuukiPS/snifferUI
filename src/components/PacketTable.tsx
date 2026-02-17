@@ -85,6 +85,30 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
         }
     }));
 
+    // Track previous packet count to detect list changes (search clear vs new packets)
+    const prevPacketCountRef = useRef(sortedPackets.length);
+
+    // When the filtered/sorted list changes and we have a selected packet,
+    // scroll so the selected packet stays visible (e.g., after clearing search)
+    useEffect(() => {
+        const prevCount = prevPacketCountRef.current;
+        prevPacketCountRef.current = sortedPackets.length;
+
+        // Only trigger when the list size changes significantly (filter change),
+        // not on every single new packet arrival
+        if (!selectedPacket) return;
+        // If only 1 packet was added, it's likely a streaming append — skip
+        if (sortedPackets.length === prevCount + 1) return;
+        // If list grew by 0 or shrank, or grew by more than 1, it's a filter change
+        const selectedIndex = sortedPackets.findIndex(p => p.index === selectedPacket.index);
+        if (selectedIndex >= 0) {
+            // Small delay to let the virtualizer recalculate
+            setTimeout(() => {
+                virtualizer.scrollToIndex(selectedIndex, { align: 'center', behavior: 'auto' });
+            }, 30);
+        }
+    }, [sortedPackets, selectedPacket, virtualizer]);
+
     // Auto-scroll when packets change and autoScroll is enabled
     // Use a timeout to debounce rapid updates
     useEffect(() => {
