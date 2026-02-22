@@ -305,19 +305,19 @@ function App() {
       result = result.filter(p => {
         if (searchScope === 'ALL') {
           return (
-            p.packetName.toLowerCase().includes(term) ||
-            p.id.toString().includes(term) ||
-            p.index.toString().includes(term) ||
-            (typeof p.data === 'string' ? p.data : JSON.stringify(p.data)).toLowerCase().includes(term)
+            (p.packetName || '').toLowerCase().includes(term) ||
+            (p.id?.toString() || '').includes(term) ||
+            (p.index?.toString() || '').includes(term) ||
+            ((typeof p.data === 'string' ? p.data : JSON.stringify(p.data)) || '').toLowerCase().includes(term)
           );
         } else if (searchScope === 'NAME') {
-          return p.packetName.toLowerCase().includes(term);
+          return (p.packetName || '').toLowerCase().includes(term);
         } else if (searchScope === 'ID') {
-          return p.id.toString().includes(term);
+          return (p.id?.toString() || '').includes(term);
         } else if (searchScope === 'SEQ') {
-          return p.index.toString().includes(term);
+          return (p.index?.toString() || '').includes(term);
         } else if (searchScope === 'CONTENT') {
-          return (typeof p.data === 'string' ? p.data : JSON.stringify(p.data)).toLowerCase().includes(term);
+          return ((typeof p.data === 'string' ? p.data : JSON.stringify(p.data)) || '').toLowerCase().includes(term);
         }
         return false;
       });
@@ -336,8 +336,15 @@ function App() {
     });
   };
 
-  const handleCopyJson = (packet: Packet) => {
-    navigator.clipboard.writeText(packet.data);
+  const handleCopyJson = (packet: Packet, pretty: boolean = true) => {
+    try {
+      const parsed = JSON.parse(packet.data);
+      const formatted = pretty ? JSON.stringify(parsed, null, 2) : JSON.stringify(parsed);
+      navigator.clipboard.writeText(formatted);
+    } catch (e) {
+      console.error("Failed to parse JSON", e);
+      navigator.clipboard.writeText(packet.data);
+    }
     setContextMenu(null);
   };
 
@@ -351,12 +358,16 @@ function App() {
   };
 
   const handleCopyName = (packet: Packet) => {
-    navigator.clipboard.writeText(packet.packetName);
+    if (packet.packetName) {
+      navigator.clipboard.writeText(packet.packetName);
+    }
     setContextMenu(null);
   };
 
   const handleCopyId = (packet: Packet) => {
-    navigator.clipboard.writeText(packet.id.toString());
+    if (packet.id !== undefined && packet.id !== null) {
+      navigator.clipboard.writeText(packet.id.toString());
+    }
     setContextMenu(null);
   };
 
@@ -648,12 +659,14 @@ function App() {
         >
           {contextMenu.type === 'name' && (
             <>
-              <div
-                className="context-menu-item"
-                onClick={() => handleHidePacketName(contextMenu.packet.packetName)}
-              >
-                Hide "{contextMenu.packet.packetName}"
-              </div>
+              {contextMenu.packet.packetName && (
+                <div
+                  className="context-menu-item"
+                  onClick={() => handleHidePacketName(contextMenu.packet.packetName)}
+                >
+                  Hide "{contextMenu.packet.packetName}"
+                </div>
+              )}
               <div
                 className="context-menu-item"
                 onClick={() => handleCopyName(contextMenu.packet)}
@@ -670,8 +683,11 @@ function App() {
           )}
           {contextMenu.type === 'data' && (
             <>
-              <div className="context-menu-item" onClick={() => handleCopyJson(contextMenu.packet)}>
-                Copy as Json
+              <div className="context-menu-item" onClick={() => handleCopyJson(contextMenu.packet, true)}>
+                Copy as Json (Pretty)
+              </div>
+              <div className="context-menu-item" onClick={() => handleCopyJson(contextMenu.packet, false)}>
+                Copy as Json (Min)
               </div>
               <div className="context-menu-item" onClick={() => handleCopyBinary(contextMenu.packet)}>
                 Copy as Binary (Base64)
