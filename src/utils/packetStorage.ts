@@ -1,18 +1,31 @@
 import type { Packet } from '../types';
 
-const DB_NAME = 'packet_monitor_db';
+const DEFAULT_DB_NAME = 'packet_monitor_db';
+let currentDbName = DEFAULT_DB_NAME;
+
 const DB_VERSION = 1;
 const STORE_NAME = 'packets';
 
 let dbInstance: IDBDatabase | null = null;
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+export function setDatabaseName(name: string) {
+  if (currentDbName !== name) {
+    if (dbInstance) {
+      dbInstance.close();
+      dbInstance = null;
+    }
+    dbPromise = null;
+    currentDbName = name;
+  }
+}
+
 function openDB(): Promise<IDBDatabase> {
   if (dbInstance) return Promise.resolve(dbInstance);
   if (dbPromise) return dbPromise;
 
   dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(currentDbName, DB_VERSION);
 
     request.onupgradeneeded = () => {
       const db = request.result;

@@ -9,6 +9,7 @@ import { ServerModal } from './components/ServerModal';
 import { ProtoUploadModal } from './components/ProtoUploadModal';
 import { JsonUploadModal } from './components/JsonUploadModal';
 import { PcapUploadModal } from './components/PcapUploadModal';
+import { DatabaseModal } from './components/DatabaseModal';
 import type { Packet } from './types';
 import {
   savePackets,
@@ -18,6 +19,7 @@ import {
   flushWriteBuffer,
   getStorageEstimate,
   formatBytes,
+  setDatabaseName,
 } from './utils/packetStorage';
 
 function App() {
@@ -33,6 +35,15 @@ function App() {
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'name' | 'data', packet: Packet } | null>(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
+  const [currentDatabase, setCurrentDatabase] = useState(() => {
+    return localStorage.getItem('packet_monitor_current_db') || 'default';
+  });
+  const [databases, setDatabases] = useState<{name: string, gameType: number}[]>(() => {
+    const saved = localStorage.getItem('packet_monitor_databases');
+    return saved ? JSON.parse(saved) : [{ name: 'default', gameType: 0 }];
+  });
 
   const [isServerModalOpen, setIsServerModalOpen] = useState(false);
   const [isProtoModalOpen, setIsProtoModalOpen] = useState(false);
@@ -84,15 +95,25 @@ function App() {
     return () => window.removeEventListener('click', handleClick);
   }, [contextMenu]);
 
-  // Load packets from IndexedDB on mount, then check server status
+  // Load packets from IndexedDB when database changes
   useEffect(() => {
     const init = async () => {
+      // 0. Update DB name
+      const dbName = currentDatabase === 'default' ? 'packet_monitor_db' : `packet_monitor_db_${currentDatabase}`;
+      setDatabaseName(dbName);
+      
+      // Clear current state first
+      setPackets([]);
+      setSelectedPacket(null);
+      globalPacketIndexRef.current = 0;
+      setCmdIdToMessageMap({});
+      protoRootRef.current = new protobuf.Root();
+
       // 1. Restore persisted packets
       try {
         const stored = await loadAllPackets();
         if (stored.length > 0) {
           setPackets(stored);
-          // Restore the global index counter so new packets don't collide
           const maxIndex = stored.reduce((max, p) => Math.max(max, p.index), 0);
           globalPacketIndexRef.current = maxIndex + 1;
           console.log(`Restored ${stored.length} packets from IndexedDB (next index: ${globalPacketIndexRef.current})`);
@@ -104,40 +125,41 @@ function App() {
       // 2. Refresh storage stats
       await refreshStorageStats();
 
-      // 3. Check server status
-      try {
-        const baseUrl = serverAddress.replace(/\/$/, "");
-        const res = await fetch(`${baseUrl}/api/status`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.is_running) {
-            console.log("Server is running, resuming monitoring...");
-            startMonitoring(baseUrl);
+      // 3. Load proto for this DB
+      const protoKey = currentDatabase === 'default' ? 'protoFileContent' : `protoFileContent_${currentDatabase}`;
+      const savedProto = localStorage.getItem(protoKey);
+      if (savedProto) {
+        console.log("Found saved proto file. Rebuilding proto...");
+        rebuildFromProto(savedProto);
+      }
+
+      // 4. Check server status (only on initial load effectively, or if connection lost)
+      if (!isMonitoring) {
+        try {
+          const baseUrl = serverAddress.replace(/\/$/, "");
+          const res = await fetch(`${baseUrl}/api/status`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.is_running) {
+              console.log("Server is running, resuming monitoring...");
+              startMonitoring(baseUrl);
+            }
           }
+        } catch (err) {
+          console.log("Server check failed (server might be down):", err);
         }
-      } catch (err) {
-        console.log("Server check failed (server might be down):", err);
       }
     };
 
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentDatabase]);
 
   // Periodically refresh storage stats (every 5s)
   useEffect(() => {
     const interval = setInterval(refreshStorageStats, 5000);
     return () => clearInterval(interval);
   }, [refreshStorageStats]);
-
-  // Load saved proto on mount
-  useEffect(() => {
-    const savedProto = localStorage.getItem("protoFileContent");
-    if (savedProto) {
-      console.log("Found saved proto file. Rebuilding proto...");
-      rebuildFromProto(savedProto);
-    }
-  }, []);
 
   // Persist hiddenNames
   useEffect(() => {
@@ -528,6 +550,8 @@ function App() {
   };
 
   const handleProtoUpload = (protoText: string): { success: boolean; mappingCount: number; error?: string } => {
+    const protoKey = currentDatabase === 'default' ? 'protoFileContent' : `protoFileContent_${currentDatabase}`;
+    localStorage.setItem(protoKey, protoText);
     return rebuildFromProto(protoText);
   };
 
@@ -542,6 +566,20 @@ function App() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleSelectDatabase = async (name: string) => {
+    // Flush current write buffer before switching
+    await flushWriteBuffer();
+    setCurrentDatabase(name);
+    localStorage.setItem('packet_monitor_current_db', name);
+  };
+
+  const handleCreateDatabase = async (name: string, gameType: number) => {
+    const newDbs = [...databases, { name, gameType }];
+    setDatabases(newDbs);
+    localStorage.setItem('packet_monitor_databases', JSON.stringify(newDbs));
+    await handleSelectDatabase(name);
   };
 
   return (
@@ -562,6 +600,7 @@ function App() {
         onProtoClick={() => setIsProtoModalOpen(true)}
         onJsonClick={() => setIsJsonModalOpen(true)}
         onPcapClick={() => setIsPcapModalOpen(true)}
+        onDatabaseClick={() => setIsDatabaseModalOpen(true)}
         autoScroll={autoScroll}
         onAutoScrollToggle={() => setAutoScroll(!autoScroll)}
         onSave={handleSave}
@@ -730,6 +769,15 @@ function App() {
         onClose={() => setIsPcapModalOpen(false)}
         serverAddress={serverAddress}
         isMonitoring={isMonitoring}
+      />
+
+      <DatabaseModal
+        isOpen={isDatabaseModalOpen}
+        onClose={() => setIsDatabaseModalOpen(false)}
+        databases={databases}
+        currentDatabase={currentDatabase}
+        onSelectDatabase={handleSelectDatabase}
+        onCreateDatabase={handleCreateDatabase}
       />
     </div>
   );

@@ -84,7 +84,7 @@ export const ProtoUploadModal = ({ isOpen, onClose, onProtoUploaded }: ProtoUplo
 
         // If at least one file succeeded, save and upload
         if (results.successCount > 0) {
-            localStorage.setItem("protoFileContent", combinedProtoText);
+            // localStorage.setItem("protoFileContent", combinedProtoText); // Moved to App.tsx to handle DB-specific storage
             const result = onProtoUploaded(combinedProtoText);
 
             if (result.success) {

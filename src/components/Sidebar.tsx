@@ -8,12 +8,13 @@ interface SidebarProps {
     onProtoClick: () => void;
     onJsonClick: () => void;
     onPcapClick: () => void;
+    onDatabaseClick: () => void;
     autoScroll: boolean;
     onAutoScrollToggle: () => void;
     onSave: () => void;
 }
 
-export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, onProtoClick, onJsonClick, onPcapClick, autoScroll, onAutoScrollToggle, onSave }: SidebarProps) => {
+export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, onProtoClick, onJsonClick, onPcapClick, onDatabaseClick, autoScroll, onAutoScrollToggle, onSave }: SidebarProps) => {
 
 
     return (
@@ -29,6 +30,9 @@ export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, onProto
                     ) : (
                         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg> // Play icon
                     )}
+                </button>
+                <button className="sidebar-btn" title="Database" onClick={onDatabaseClick}>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5.5-2.5l7.51-3.22-3.22-7.51-7.51 3.22 3.22 7.51z" /></svg>
                 </button>
                 <button className="sidebar-btn" title="Upload JSON" onClick={onJsonClick}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
