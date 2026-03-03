@@ -110,9 +110,11 @@ function App() {
       protoRootRef.current = new protobuf.Root();
 
       // 1. Restore persisted packets
+      let storedPackets: Packet[] = [];
       try {
         const stored = await loadAllPackets();
         if (stored.length > 0) {
+          storedPackets = stored;
           setPackets(stored);
           const maxIndex = stored.reduce((max, p) => Math.max(max, p.index), 0);
           globalPacketIndexRef.current = maxIndex + 1;
@@ -130,7 +132,8 @@ function App() {
       const savedProto = localStorage.getItem(protoKey);
       if (savedProto) {
         console.log("Found saved proto file. Rebuilding proto...");
-        rebuildFromProto(savedProto);
+        // Pass storedPackets to ensure we re-decode the newly loaded packets with the proto map
+        rebuildFromProto(savedProto, storedPackets);
       }
 
       // 4. Check server status (only on initial load effectively, or if connection lost)
@@ -171,7 +174,7 @@ function App() {
     localStorage.setItem('packet_monitor_auto_scroll', String(autoScroll));
   }, [autoScroll]);
 
-  const rebuildFromProto = (protoText: string): { success: boolean; mappingCount: number; error?: string } => {
+  const rebuildFromProto = (protoText: string, existingPackets?: Packet[]): { success: boolean; mappingCount: number; error?: string } => {
     try {
       const parsed = protobuf.parse(protoText);
       protoRootRef.current = parsed.root;
@@ -205,8 +208,11 @@ function App() {
     setCmdIdToMessageMap(newMap);
 
     // Rebuild existing packets with new proto definitions
-    if (packets.length > 0) {
-      const updatedPackets = packets.map(packet => {
+    // Use provided packets or fallback to state packets (but state might be stale in some contexts)
+    const packetsToProcess = existingPackets || packets;
+
+    if (packetsToProcess.length > 0) {
+      const updatedPackets = packetsToProcess.map(packet => {
         const protoName = newMap[packet.id];
 
         // If we have a matching message in the new proto and binary data, try to decode
@@ -214,9 +220,7 @@ function App() {
           try {
             const buffer = Uint8Array.from(atob(packet.binary), c => c.charCodeAt(0));
             // protoRootRef.current is already updated with the new proto
-            const Message = protoRootRef.current.lookupType(protoName); // Note: Type lookup might throw if not found, but we have protoName from newMap which was derived from keys?
-            // Wait, newMap contains names. protoRootRef.current might not contain the type if the map parsing logic is simpler than the full proto parse logic 
-            // but here we used protobuf.parse first, so protoRootRef should be valid.
+            const Message = protoRootRef.current.lookupType(protoName); 
             
             const decodedMessage = Message.decode(buffer).toJSON();
 
