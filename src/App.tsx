@@ -28,7 +28,9 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchScope, setSearchScope] = useState<'ALL' | 'NAME' | 'ID' | 'SEQ' | 'CONTENT'>('ALL');
   const [hiddenNames, setHiddenNames] = useState<string[]>(() => {
-    const saved = localStorage.getItem('packet_monitor_hidden_names');
+    const currentDb = localStorage.getItem('packet_monitor_current_db') || 'default';
+    const key = currentDb === 'default' ? 'packet_monitor_hidden_names' : `packet_monitor_hidden_names_${currentDb}`;
+    const saved = localStorage.getItem(key);
     return saved ? JSON.parse(saved) : [];
   });
   const [isFilterSettingsOpen, setIsFilterSettingsOpen] = useState(false);
@@ -166,8 +168,9 @@ function App() {
 
   // Persist hiddenNames
   useEffect(() => {
-    localStorage.setItem('packet_monitor_hidden_names', JSON.stringify(hiddenNames));
-  }, [hiddenNames]);
+    const key = currentDatabase === 'default' ? 'packet_monitor_hidden_names' : `packet_monitor_hidden_names_${currentDatabase}`;
+    localStorage.setItem(key, JSON.stringify(hiddenNames));
+  }, [hiddenNames, currentDatabase]);
 
   // Persist autoScroll
   useEffect(() => {
@@ -419,6 +422,7 @@ function App() {
     // Clear persisted packets from IndexedDB
     try {
       await flushWriteBuffer();
+      console.log(`Clearing packets for database: ${currentDatabase}`);
       await clearAllPackets();
       await refreshStorageStats();
       console.log('Cleared all persisted packets from IndexedDB.');
@@ -575,8 +579,17 @@ function App() {
   const handleSelectDatabase = async (name: string) => {
     // Flush current write buffer before switching
     await flushWriteBuffer();
+    
+    // Load hidden names for the new database
+    const hiddenKey = name === 'default' ? 'packet_monitor_hidden_names' : `packet_monitor_hidden_names_${name}`;
+    const savedHidden = localStorage.getItem(hiddenKey);
+    const newHiddenNames = savedHidden ? JSON.parse(savedHidden) : [];
+    
+    // Update state in batch (React 18 handles this automatically in async functions too)
+    setHiddenNames(newHiddenNames);
     setCurrentDatabase(name);
     localStorage.setItem('packet_monitor_current_db', name);
+    setIsDatabaseModalOpen(false);
   };
 
   const handleCreateDatabase = async (name: string, gameType: number) => {
