@@ -55,6 +55,11 @@ function App() {
     return localStorage.getItem('packet_monitor_server_address') || "http://localhost:1985";
   });
 
+  const GAME_GI = 0;
+  const currentGameType = useMemo(() => {
+    return databases.find(d => d.name === currentDatabase)?.gameType ?? GAME_GI;
+  }, [databases, currentDatabase]);
+
   // Proto-related state
   const protoRootRef = useRef<protobuf.Root>(new protobuf.Root());
   const [cmdIdToMessageMap, setCmdIdToMessageMap] = useState<{ [cmdId: number]: string }>({});
@@ -298,7 +303,13 @@ function App() {
 
         return {
           timestamp: new Date(item.time).toLocaleTimeString(),
-          source: (item.source?.toUpperCase() === 'CLIENT' ? 'CLIENT' : 'SERVER'),
+          source: (() => {
+            const src = String(item.source || '').toUpperCase();
+            if (src === 'CLIENT' || src === 'SERVER' || src === 'SUB_CLIENT' || src === 'SUB_SERVER') {
+              return src as Packet['source'];
+            }
+            return 'SERVER';
+          })(),
           id: item.packetId,
           packetName: item.packetName,
           length: item.length,
@@ -508,7 +519,15 @@ function App() {
             source: (packetData.source?.toUpperCase() === 'CLIENT' ? 'CLIENT' : 'SERVER'),
             id: packetData.packetId,
             packetName: protoName || 'Unknown',
-            length: packetData.length || (packetData.binary ? packetData.binary.length : 0),
+            length: (() => {
+              try {
+                if (packetData.binary) {
+                  const buf = Uint8Array.from(atob(packetData.binary), c => c.charCodeAt(0));
+                  return buf.length;
+                }
+              } catch {}
+              return packetData.length || (packetData.binary ? packetData.binary.length : 0);
+            })(),
             index: currentIndex,
             data: finalDataStr,
             binary: packetData.binary,
@@ -520,6 +539,67 @@ function App() {
             // Persist to IndexedDB via batched write buffer
             queuePacketSave(newPacket, refreshStorageStats);
 
+          if (currentGameType === GAME_GI && newPacket.packetName === 'UnionCmdNotify') {
+            try {
+              console.log('UnionCmdNotify:', finalDataStr);
+              const parsedUnion = finalDataStr ? JSON.parse(finalDataStr) : null;
+              const cmdList = parsedUnion && Array.isArray(parsedUnion.cmdList) ? parsedUnion.cmdList : null;
+              if (cmdList) {
+                for (const sub of cmdList) {
+                  try {
+                    const subId = Number(sub.messageId);
+                    const subBinary: string | undefined = sub.body;
+                    const subProtoName = cmdIdToMessageMapRef.current[subId];
+                    let subDataStr = "";
+                    let subSource: 'BINARY' | 'JSON' = 'JSON';
+                    if (subBinary && subProtoName) {
+                      try {
+                        const subBuf = Uint8Array.from(atob(subBinary), c => c.charCodeAt(0));
+                        const SubMessage = protoRootRef.current.lookupType(subProtoName);
+                        const subDecoded = SubMessage.decode(subBuf).toJSON();
+                        subDataStr = JSON.stringify(subDecoded);
+                        subSource = 'BINARY';
+                      } catch {
+                        subDataStr = JSON.stringify(sub);
+                        subSource = 'JSON';
+                      }
+                    } else {
+                      if (subBinary) {
+                        subDataStr = JSON.stringify(sub);
+                        subSource = 'JSON';
+                      } else {
+                        subDataStr = JSON.stringify(sub);
+                        subSource = 'JSON';
+                      }
+                    }
+                    const subIndex = globalPacketIndexRef.current++;
+                    const subLength = (() => {
+                      try {
+                        if (subBinary) {
+                          const b = Uint8Array.from(atob(subBinary), c => c.charCodeAt(0));
+                          return b.length;
+                        }
+                      } catch {}
+                      return subBinary ? subBinary.length : 0;
+                    })();
+                    const subPacket: Packet = {
+                      timestamp: newPacket.timestamp,
+                      source: newPacket.source === 'CLIENT' ? 'SUB_CLIENT' : 'SUB_SERVER',
+                      id: subId,
+                      packetName: subProtoName || 'Unknown',
+                      length: subLength,
+                      index: subIndex,
+                      data: subDataStr,
+                      binary: subBinary || "",
+                      dataSource: subSource
+                    };
+                    setPackets(prev => [...prev, subPacket]);
+                    queuePacketSave(subPacket, refreshStorageStats);
+                  } catch {}
+                }
+              }
+            } catch {}
+          }
         } catch (err) {
           console.error("Error parsing stream packet:", err);
         }

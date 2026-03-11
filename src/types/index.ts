@@ -1,6 +1,6 @@
 export interface Packet {
     timestamp: string;
-    source: 'CLIENT' | 'SERVER';
+    source: 'CLIENT' | 'SERVER' | 'SUB_CLIENT' | 'SUB_SERVER';
     id: number;
     packetName: string;
     length: number;

@@ -211,7 +211,7 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                                 </div>
                                 <div className="virtual-cell text-center" style={{ width: '100px' }}>
                                     <span className={`source-badge ${packet.source.toLowerCase()}`}>
-                                        {packet.source}
+                                        {packet.source.replace('_', '+')}
                                     </span>
                                 </div>
                                 <div className="virtual-cell text-center" style={{ width: '80px' }}>

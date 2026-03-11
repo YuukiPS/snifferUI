@@ -92,6 +92,14 @@
     background-color: var(--accent-secondary);
 }
 
+.source-badge.sub_client {
+    background-color: #3b82f6;
+}
+
+.source-badge.sub_server {
+    background-color: #8b5cf6;
+}
+
 .source-badge.binary {
     background-color: #2196F3;
 }
