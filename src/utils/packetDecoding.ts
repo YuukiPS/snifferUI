@@ -58,6 +58,24 @@ export const buildGiSubPackets = ({
   timestamp: string;
   createIndex: (i: number) => number;
 }): Packet[] | undefined => {
+  const attachNestedSubPackets = (pkt: Packet) => {
+    if (pkt.dataSource !== 'BINARY') return;
+    if (pkt.packetName !== 'UnionCmdNotify' && pkt.packetName !== 'CombatInvocationsNotify') return;
+    try {
+      const parsed = JSON.parse(pkt.data);
+      const nested = buildGiSubPackets({
+        parent: pkt,
+        parentName: pkt.packetName,
+        decodedObj: parsed,
+        cmdIdToMessageMap,
+        protoRoot,
+        timestamp: pkt.timestamp,
+        createIndex: (i) => pkt.index * 1000 + (i + 1),
+      });
+      if (nested && nested.length > 0) pkt.subPackets = nested;
+    } catch {}
+  };
+
   if (parentName === 'UnionCmdNotify') {
     const cmdList = getFirstArrayProp(decodedObj, ['cmdList', 'cmdListList', 'cmd_list']);
     if (!cmdList || cmdList.length === 0) return undefined;
@@ -83,7 +101,7 @@ export const buildGiSubPackets = ({
             subSource = 'JSON';
           }
         }
-        subs.push({
+        const pkt: Packet = {
           timestamp,
           source: isClientish(parent.source) ? 'SUB_CLIENT' : 'SUB_SERVER',
           id: subId,
@@ -93,7 +111,9 @@ export const buildGiSubPackets = ({
           data: subDataStr,
           binary: subBinary,
           dataSource: subSource,
-        });
+        };
+        attachNestedSubPackets(pkt);
+        subs.push(pkt);
       } catch {}
     }
     return subs.length > 0 ? subs : undefined;
@@ -146,4 +166,3 @@ export const buildGiSubPackets = ({
 
   return undefined;
 };
-

@@ -25,7 +25,7 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
         key: 'index',
         direction: 'asc'
     });
-    const [expandedParentIndex, setExpandedParentIndex] = useState<number | null>(null);
+    const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
 
     const parentRef = useRef<HTMLDivElement>(null);
 
@@ -71,22 +71,29 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
         return sorted;
     }, [packets, sortConfig]);
 
-    type Row =
-        | { kind: 'packet'; packet: Packet }
-        | { kind: 'sub'; packet: Packet; parent: Packet; subPos: number };
+    type Row = {
+        packet: Packet;
+        depth: number;
+        path: string;
+        parent?: Packet;
+        subPos?: number;
+    };
 
     const rows = useMemo<Row[]>(() => {
         const out: Row[] = [];
-        for (const p of sortedPackets) {
-            out.push({ kind: 'packet', packet: p });
-            if (expandedParentIndex === p.index && p.subPackets && p.subPackets.length > 0) {
-                for (let i = 0; i < p.subPackets.length; i++) {
-                    out.push({ kind: 'sub', packet: p.subPackets[i], parent: p, subPos: i });
+        const pushRecursive = (pkt: Packet, depth: number, path: string, parent?: Packet, subPos?: number) => {
+            out.push({ packet: pkt, depth, path, parent, subPos });
+            if (expandedIds.has(pkt.index) && pkt.subPackets && pkt.subPackets.length > 0) {
+                for (let i = 0; i < pkt.subPackets.length; i++) {
+                    const sub = pkt.subPackets[i];
+                    const subPath = `${path}.${i + 1}`;
+                    pushRecursive(sub, depth + 1, subPath, pkt, i);
                 }
             }
-        }
+        };
+        for (const p of sortedPackets) pushRecursive(p, 0, String(p.index));
         return out;
-    }, [sortedPackets, expandedParentIndex]);
+    }, [sortedPackets, expandedIds]);
 
     const virtualizer = useVirtualizer({
         count: rows.length,
@@ -146,17 +153,16 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
     }, [packets.length, autoScroll]);
 
     const handleRowClick = (row: Row) => {
-        if (row.kind === 'packet') {
-            if (row.packet.subPackets && row.packet.subPackets.length > 0) {
-                setExpandedParentIndex(current => (current === row.packet.index ? null : row.packet.index));
-            } else {
-                setExpandedParentIndex(null);
-            }
-            onSelectPacket(row.packet);
-        } else {
-            setExpandedParentIndex(row.parent.index);
-            onSelectPacket(row.packet);
+        const hasSubs = !!row.packet.subPackets && row.packet.subPackets.length > 0;
+        if (hasSubs) {
+            setExpandedIds(prev => {
+                const next = new Set(prev);
+                if (next.has(row.packet.index)) next.delete(row.packet.index);
+                else next.add(row.packet.index);
+                return next;
+            });
         }
+        onSelectPacket(row.packet);
     };
 
     const handleSort = (key: SortKey) => {
@@ -222,8 +228,8 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                     {virtualizer.getVirtualItems().map((virtualRow) => {
                         const row = rows[virtualRow.index];
                         const packet = row.packet;
-                        const isSub = row.kind === 'sub';
-                        const displayIndex = isSub ? `${row.parent.index}.${row.subPos + 1}` : String(packet.index);
+                        const isSub = row.depth > 0;
+                        const displayIndex = row.path;
                         return (
                             <div
                                 key={virtualRow.key}
@@ -261,18 +267,16 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                                 </div>
                                 <div
                                     className="virtual-cell font-mono text-accent"
-                                    style={{ width: '200px', cursor: 'context-menu', paddingLeft: isSub ? '22px' : undefined }}
+                                    style={{ width: '200px', cursor: 'context-menu', paddingLeft: isSub ? `${22 * Math.min(row.depth, 4)}px` : undefined }}
                                     onContextMenu={(e) => handleNameContextMenu(e, packet)}
                                 >
-                                    {isSub
-                                        ? `↳ ${packet.packetName}`
-                                        : (() => {
-                                            const count = (packet.subPackets && packet.subPackets.length) || 0;
-                                            const hasSubs = count > 0;
-                                            const arrow = hasSubs ? (expandedParentIndex === packet.index ? '▼' : '▶') : '';
-                                            return `${arrow ? arrow + ' ' : ''}${packet.packetName}${hasSubs ? ` (${count})` : ''}`;
-                                        })()
-                                    }
+                                    {(() => {
+                                        const count = (packet.subPackets && packet.subPackets.length) || 0;
+                                        const hasSubs = count > 0;
+                                        const arrow = hasSubs ? (expandedIds.has(packet.index) ? '▼' : '▶') : '';
+                                        const prefix = isSub ? '↳ ' : '';
+                                        return `${prefix}${arrow ? arrow + ' ' : ''}${packet.packetName}${hasSubs ? ` (${count})` : ''}`;
+                                    })()}
                                 </div>
                                 <div className="virtual-cell text-right font-mono text-sm" style={{ width: '80px' }}>
                                     {packet.length}
