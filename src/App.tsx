@@ -21,6 +21,7 @@ import {
   formatBytes,
   setDatabaseName,
 } from './utils/packetStorage';
+import { buildGiSubPackets, decodeBase64ToBytes } from './utils/packetDecoding';
 
 function App() {
   const [packets, setPackets] = useState<Packet[]>([]);
@@ -56,72 +57,6 @@ function App() {
   });
 
   const GAME_GI = 1;
-  const COMBAT_ARG_TYPE_TO_MESSAGE: Record<string, string> = {
-    "CombatTypeArgument_COMBAT_EVT_BEING_HIT": "EvtBeingHitInfo",
-    "CombatTypeArgument_ENTITY_MOVE": "EntityMoveInfo",
-    "CombatTypeArgument_ANIMATOR_PARAMETER_CHANGED": "EvtAnimatorParameterInfo"
-  };
-  const decodeUnknownProtobuf = (buf: Uint8Array) => {
-    const readVarint = (b: Uint8Array, o: number) => {
-      let x = 0;
-      let s = 0;
-      let i = o;
-      for (;;) {
-        const v = b[i++];
-        x |= (v & 0x7f) << s;
-        if ((v & 0x80) === 0) break;
-        s += 7;
-      }
-      return [x, i] as const;
-    };
-    const toHex = (b: Uint8Array) => {
-      let h = "";
-      for (let i = 0; i < b.length; i++) {
-        const v = b[i].toString(16).padStart(2, "0");
-        h += v;
-      }
-      return h;
-    };
-    const toBase64 = (b: Uint8Array) => {
-      let s = "";
-      for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
-      return btoa(s);
-    };
-    const out: any[] = [];
-    let o = 0;
-    while (o < buf.length) {
-      const [key, o1] = readVarint(buf, o);
-      o = o1;
-      const f = key >>> 3;
-      const wt = key & 0x7;
-      if (wt === 0) {
-        const [val, o2] = readVarint(buf, o);
-        o = o2;
-        out.push({ field: f, wireType: wt, varint: val });
-      } else if (wt === 1) {
-        const bytes = buf.slice(o, o + 8);
-        o += 8;
-        out.push({ field: f, wireType: wt, fixed64: toHex(bytes), base64: toBase64(bytes) });
-      } else if (wt === 2) {
-        const [len, o2] = readVarint(buf, o);
-        o = o2;
-        const bytes = buf.slice(o, o + len);
-        o += len;
-        let nested: any = null;
-        try {
-          nested = decodeUnknownProtobuf(bytes);
-        } catch {}
-        out.push({ field: f, wireType: wt, length: len, bytesHex: toHex(bytes), bytesBase64: toBase64(bytes), nested });
-      } else if (wt === 5) {
-        const bytes = buf.slice(o, o + 4);
-        o += 4;
-        out.push({ field: f, wireType: wt, fixed32: toHex(bytes), base64: toBase64(bytes) });
-      } else {
-        break;
-      }
-    }
-    return out;
-  };
   const currentGameType = useMemo(() => {
     return databases.find(d => d.name === currentDatabase)?.gameType ?? GAME_GI;
   }, [databases, currentDatabase]);
@@ -281,122 +216,6 @@ function App() {
 
     setCmdIdToMessageMap(newMap);
 
-    const decodeBase64ToBytes = (b64: string) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const base64ByteLength = (b64?: string) => {
-      if (!b64) return 0;
-      try {
-        return decodeBase64ToBytes(b64).length;
-      } catch {
-        return b64.length;
-      }
-    };
-    const getFirstArrayProp = (obj: any, keys: string[]) => {
-      if (!obj || typeof obj !== 'object') return null;
-      for (const k of keys) {
-        const v = obj[k];
-        if (Array.isArray(v)) return v;
-      }
-      return null;
-    };
-    const getBase64String = (v: any): string | undefined => {
-      if (typeof v === 'string') return v;
-      if (!v || typeof v !== 'object') return undefined;
-      const candidates = ['base64', 'b64', 'data', 'value'];
-      for (const k of candidates) {
-        if (typeof v[k] === 'string') return v[k];
-      }
-      return undefined;
-    };
-    const buildSubPackets = (parent: Packet, parentName: string, decodedObj: any): Packet[] | undefined => {
-      if (parentName === 'UnionCmdNotify') {
-        const cmdList = getFirstArrayProp(decodedObj, ['cmdList', 'cmdListList', 'cmd_list']);
-        if (!cmdList || cmdList.length === 0) return undefined;
-        const subs: Packet[] = [];
-        for (let i = 0; i < cmdList.length; i++) {
-          const sub = cmdList[i];
-          try {
-            const subId = Number(sub.messageId);
-            const subBinary = getBase64String(sub.body);
-            if (!subBinary) continue;
-            const subProtoName = newMap[subId];
-            let subDataStr = JSON.stringify(sub);
-            let subSource: 'BINARY' | 'JSON' = 'JSON';
-            if (subProtoName) {
-              try {
-                const subBuf = decodeBase64ToBytes(subBinary);
-                const SubMessage = protoRootRef.current.lookupType(subProtoName);
-                const subDecoded = SubMessage.decode(subBuf).toJSON();
-                subDataStr = JSON.stringify(subDecoded);
-                subSource = 'BINARY';
-              } catch {
-                subDataStr = JSON.stringify(sub);
-                subSource = 'JSON';
-              }
-            }
-            subs.push({
-              timestamp: parent.timestamp,
-              source: parent.source === 'CLIENT' ? 'SUB_CLIENT' : 'SUB_SERVER',
-              id: subId,
-              packetName: subProtoName || 'Unknown',
-              length: base64ByteLength(subBinary),
-              index: parent.index * 1000 + (i + 1),
-              data: subDataStr,
-              binary: subBinary,
-              dataSource: subSource
-            });
-          } catch {}
-        }
-        return subs.length > 0 ? subs : undefined;
-      }
-
-      if (parentName === 'CombatInvocationsNotify') {
-        const list = getFirstArrayProp(decodedObj, ['invokeList', 'invokeListList', 'invoke_list']);
-        if (!list || list.length === 0) return undefined;
-        const subs: Packet[] = [];
-        for (let i = 0; i < list.length; i++) {
-          const inv = list[i];
-          try {
-            const argType: string = String(inv.argumentType || '');
-            const forwardType: string = String(inv.forwardType || '');
-            const subBinary = getBase64String(inv.combatData);
-            if (!subBinary) continue;
-            const mappedName = COMBAT_ARG_TYPE_TO_MESSAGE[argType];
-            const guessName = mappedName || argType || 'Unknown';
-            let decodedPayload: any = inv;
-            let subSource: 'BINARY' | 'JSON' = 'JSON';
-            try {
-              const buf = decodeBase64ToBytes(subBinary);
-              if (mappedName) {
-                const Msg = protoRootRef.current.lookupType(mappedName);
-                decodedPayload = Msg.decode(buf).toJSON();
-                subSource = 'BINARY';
-              } else {
-                decodedPayload = { unknownDecoded: decodeUnknownProtobuf(buf) };
-                subSource = 'BINARY';
-              }
-            } catch {
-              decodedPayload = inv;
-              subSource = 'JSON';
-            }
-            subs.push({
-              timestamp: parent.timestamp,
-              source: parent.source === 'CLIENT' ? 'SUB_CLIENT' : 'SUB_SERVER',
-              id: 0,
-              packetName: guessName,
-              length: base64ByteLength(subBinary),
-              index: parent.index * 1000 + (i + 1),
-              data: JSON.stringify({ argumentType: argType, forwardType: forwardType, payload: decodedPayload }),
-              binary: subBinary,
-              dataSource: subSource
-            });
-          } catch {}
-        }
-        return subs.length > 0 ? subs : undefined;
-      }
-
-      return undefined;
-    };
-
     // Rebuild existing packets with new proto definitions
     // Use provided packets or fallback to state packets (but state might be stale in some contexts)
     const packetsToProcess = existingPackets || packets;
@@ -413,7 +232,15 @@ function App() {
             const Message = protoRootRef.current.lookupType(protoName); 
             
             const decodedMessage = Message.decode(buffer).toJSON();
-            const subs = currentGameType === GAME_GI ? buildSubPackets(packet, protoName, decodedMessage) : undefined;
+            const subs = currentGameType === GAME_GI ? buildGiSubPackets({
+              parent: packet,
+              parentName: protoName,
+              decodedObj: decodedMessage,
+              cmdIdToMessageMap: newMap,
+              protoRoot: protoRootRef.current,
+              timestamp: packet.timestamp,
+              createIndex: (i) => packet.index * 1000 + (i + 1),
+            }) : undefined;
 
             return {
               ...packet,
@@ -548,7 +375,7 @@ function App() {
     }
 
     return result;
-  }, [packets, searchTerm, hiddenNames]);
+  }, [packets, searchTerm, hiddenNames, searchScope]);
 
   const handleRowContextMenu = (event: React.MouseEvent, packet: Packet, type: 'name' | 'data') => {
     event.preventDefault(); // Prevent native context menu just in case, though PacketTable handles it
@@ -665,16 +492,6 @@ function App() {
           const packetData = JSON.parse(e.data);
           const currentIndex = globalPacketIndexRef.current++;
 
-          const decodeBase64ToBytes = (b64: string) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-          const base64ByteLength = (b64?: string) => {
-            if (!b64) return 0;
-            try {
-              return decodeBase64ToBytes(b64).length;
-            } catch {
-              return b64.length;
-            }
-          };
-
           // Logic: Prioritize Binary -> Proto Decode. Fallback -> JSON data.
           let finalDataStr = "";
           let finalSource: 'BINARY' | 'JSON' = 'JSON';
@@ -709,118 +526,10 @@ function App() {
             }
           }
 
-          let subPackets: Packet[] | undefined;
-          const getFirstArrayProp = (obj: any, keys: string[]) => {
-            if (!obj || typeof obj !== 'object') return null;
-            for (const k of keys) {
-              const v = obj[k];
-              if (Array.isArray(v)) return v;
-            }
-            return null;
-          };
-          const getBase64String = (v: any): string | undefined => {
-            if (typeof v === 'string') return v;
-            if (!v || typeof v !== 'object') return undefined;
-            const candidates = ['base64', 'b64', 'data', 'value'];
-            for (const k of candidates) {
-              if (typeof v[k] === 'string') return v[k];
-            }
-            return undefined;
-          };
-          if (currentGameType === GAME_GI && (protoName === 'UnionCmdNotify' || protoName === 'CombatInvocationsNotify') && finalDataStr) {
-            try {
-              const parsed = JSON.parse(finalDataStr);
-              if (protoName === 'UnionCmdNotify') {
-                const cmdList = getFirstArrayProp(parsed, ['cmdList', 'cmdListList', 'cmd_list']);
-                if (cmdList && cmdList.length > 0) {
-                  const subs: Packet[] = [];
-                  for (const sub of cmdList) {
-                    try {
-                      const subId = Number(sub.messageId);
-                      const subBinary = getBase64String(sub.body);
-                      if (!subBinary) continue;
-                      const subProtoName = cmdIdToMessageMapRef.current[subId];
-                      let subDataStr = "";
-                      let subSource: 'BINARY' | 'JSON' = 'JSON';
-                      if (subProtoName) {
-                        try {
-                          const subBuf = decodeBase64ToBytes(subBinary);
-                          const SubMessage = protoRootRef.current.lookupType(subProtoName);
-                          const subDecoded = SubMessage.decode(subBuf).toJSON();
-                          subDataStr = JSON.stringify(subDecoded);
-                          subSource = 'BINARY';
-                        } catch {
-                          subDataStr = JSON.stringify(sub);
-                          subSource = 'JSON';
-                        }
-                      } else {
-                        subDataStr = JSON.stringify(sub);
-                        subSource = 'JSON';
-                      }
-                      subs.push({
-                        timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
-                        source: packetSource === 'CLIENT' ? 'SUB_CLIENT' : 'SUB_SERVER',
-                        id: subId,
-                        packetName: subProtoName || 'Unknown',
-                        length: base64ByteLength(subBinary),
-                        index: globalPacketIndexRef.current++,
-                        data: subDataStr,
-                        binary: subBinary,
-                        dataSource: subSource
-                      });
-                    } catch {}
-                  }
-                  if (subs.length > 0) subPackets = subs;
-                }
-              } else if (protoName === 'CombatInvocationsNotify') {
-                const list = getFirstArrayProp(parsed, ['invokeList', 'invokeListList', 'invoke_list']);
-                if (list && list.length > 0) {
-                  const subs: Packet[] = [];
-                  for (const inv of list) {
-                    try {
-                      const argType: string = String(inv.argumentType || '');
-                      const forwardType: string = String(inv.forwardType || '');
-                      const subBinary = getBase64String(inv.combatData);
-                      if (!subBinary) continue;
-                      const mappedName = COMBAT_ARG_TYPE_TO_MESSAGE[argType];
-                      const guessName = mappedName || argType || 'Unknown';
-                      let decodedObj: any = null;
-                      let subSource: 'BINARY' | 'JSON' = 'JSON';
-                      try {
-                        const buf = decodeBase64ToBytes(subBinary);
-                        if (mappedName) {
-                          const Msg = protoRootRef.current.lookupType(mappedName);
-                          decodedObj = Msg.decode(buf).toJSON();
-                          subSource = 'BINARY';
-                        } else {
-                          decodedObj = { unknownDecoded: decodeUnknownProtobuf(buf) };
-                          subSource = 'BINARY';
-                        }
-                      } catch {
-                        decodedObj = inv;
-                        subSource = 'JSON';
-                      }
-                      subs.push({
-                        timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
-                        source: packetSource === 'CLIENT' ? 'SUB_CLIENT' : 'SUB_SERVER',
-                        id: 0,
-                        packetName: guessName,
-                        length: base64ByteLength(subBinary),
-                        index: globalPacketIndexRef.current++,
-                        data: JSON.stringify({ argumentType: argType, forwardType: forwardType, payload: decodedObj }),
-                        binary: subBinary,
-                        dataSource: subSource
-                      });
-                    } catch {}
-                  }
-                  if (subs.length > 0) subPackets = subs;
-                }
-              }
-            } catch {}
-          }
+          const timestamp = new Date(packetData.time || Date.now()).toLocaleTimeString();
 
           const newPacket: Packet = {
-            timestamp: new Date(packetData.time || Date.now()).toLocaleTimeString(),
+            timestamp,
             source: packetSource,
             id: packetData.packetId,
             packetName: protoName || 'Unknown',
@@ -837,8 +546,23 @@ function App() {
             data: finalDataStr,
             binary: packetData.binary,
             dataSource: finalSource,
-            subPackets
           };
+
+          if (currentGameType === GAME_GI && (protoName === 'UnionCmdNotify' || protoName === 'CombatInvocationsNotify') && finalDataStr) {
+            try {
+              const parsed = JSON.parse(finalDataStr);
+              const subs = buildGiSubPackets({
+                parent: newPacket,
+                parentName: protoName,
+                decodedObj: parsed,
+                cmdIdToMessageMap: cmdIdToMessageMapRef.current,
+                protoRoot: protoRootRef.current,
+                timestamp,
+                createIndex: () => globalPacketIndexRef.current++,
+              });
+              if (subs && subs.length > 0) newPacket.subPackets = subs;
+            } catch {}
+          }
 
           setPackets(prev => [...prev, newPacket]);
 

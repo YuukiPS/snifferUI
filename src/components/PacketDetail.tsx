@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { Packet } from '../types';
 import './PacketDetail.css';
+import { UnknownProtobufDecoder } from './UnknownProtobufDecoder';
 
 interface PacketDetailProps {
     packet: Packet | null;
     onClose?: () => void;
 }
 
-type ViewMode = 'text' | 'tree' | 'table';
+type ViewMode = 'text' | 'tree' | 'table' | 'protobuf';
 
 // Generic interface for matches to support both Text (line based) and Tree (path based)
 interface BaseMatch {
@@ -621,47 +622,58 @@ export const PacketDetail: React.FC<PacketDetailProps> = ({ packet }) => {
                     >
                         table
                     </button>
+                    <button
+                        className={`toolbar-btn ${viewMode === 'protobuf' ? 'active' : ''}`}
+                        onClick={() => setViewMode('protobuf')}
+                        disabled={!packet.binary}
+                    >
+                        protobuf
+                    </button>
 
-                    <div className="divider" />
+                    {viewMode !== 'protobuf' && (
+                        <>
+                            <div className="divider" />
 
-                    <div className="search-box">
-                        <div className="search-input-wrapper">
-                            <input
-                                type="text"
-                                placeholder="Find..."
-                                className="search-input"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        if (e.shiftKey) handlePrevMatch();
-                                        else handleNextMatch();
-                                    }
-                                }}
-                            />
-                            {searchTerm && matches.length > 0 && (
-                                <span className="search-count">
-                                    {currentMatchIndex + 1}/{matches.length}
-                                </span>
-                            )}
-                            {searchTerm && matches.length === 0 && (
-                                <span className="search-count">0/0</span>
-                            )}
-                        </div>
-                        <div className="search-controls">
-                            <button className="search-nav-btn" onClick={handlePrevMatch} disabled={matches.length === 0}>
-                                ▲
-                            </button>
-                            <button className="search-nav-btn" onClick={handleNextMatch} disabled={matches.length === 0}>
-                                ▼
-                            </button>
-                            {searchTerm && (
-                                <button className="search-nav-btn close" onClick={() => setSearchTerm('')}>
-                                    ×
-                                </button>
-                            )}
-                        </div>
-                    </div>
+                            <div className="search-box">
+                                <div className="search-input-wrapper">
+                                    <input
+                                        type="text"
+                                        placeholder="Find..."
+                                        className="search-input"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                if (e.shiftKey) handlePrevMatch();
+                                                else handleNextMatch();
+                                            }
+                                        }}
+                                    />
+                                    {searchTerm && matches.length > 0 && (
+                                        <span className="search-count">
+                                            {currentMatchIndex + 1}/{matches.length}
+                                        </span>
+                                    )}
+                                    {searchTerm && matches.length === 0 && (
+                                        <span className="search-count">0/0</span>
+                                    )}
+                                </div>
+                                <div className="search-controls">
+                                    <button className="search-nav-btn" onClick={handlePrevMatch} disabled={matches.length === 0}>
+                                        ▲
+                                    </button>
+                                    <button className="search-nav-btn" onClick={handleNextMatch} disabled={matches.length === 0}>
+                                        ▼
+                                    </button>
+                                    {searchTerm && (
+                                        <button className="search-nav-btn close" onClick={() => setSearchTerm('')}>
+                                            ×
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -694,6 +706,11 @@ export const PacketDetail: React.FC<PacketDetailProps> = ({ packet }) => {
                     )}
                     {viewMode === 'table' && (
                         parsedData ? <JsonTableView data={parsedData} /> : <div className="error-msg">Invalid JSON Data</div>
+                    )}
+                    {viewMode === 'protobuf' && (
+                        packet.binary
+                            ? <UnknownProtobufDecoder initialBase64={packet.binary} />
+                            : <div className="error-msg">No binary data</div>
                     )}
                 </div>
             </div>
