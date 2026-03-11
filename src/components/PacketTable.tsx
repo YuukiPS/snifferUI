@@ -25,6 +25,7 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
         key: 'index',
         direction: 'asc'
     });
+    const [expandedParentIndex, setExpandedParentIndex] = useState<number | null>(null);
 
     const parentRef = useRef<HTMLDivElement>(null);
 
@@ -70,8 +71,25 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
         return sorted;
     }, [packets, sortConfig]);
 
+    type Row =
+        | { kind: 'packet'; packet: Packet }
+        | { kind: 'sub'; packet: Packet; parent: Packet; subPos: number };
+
+    const rows = useMemo<Row[]>(() => {
+        const out: Row[] = [];
+        for (const p of sortedPackets) {
+            out.push({ kind: 'packet', packet: p });
+            if (expandedParentIndex === p.index && p.subPackets && p.subPackets.length > 0) {
+                for (let i = 0; i < p.subPackets.length; i++) {
+                    out.push({ kind: 'sub', packet: p.subPackets[i], parent: p, subPos: i });
+                }
+            }
+        }
+        return out;
+    }, [sortedPackets, expandedParentIndex]);
+
     const virtualizer = useVirtualizer({
-        count: sortedPackets.length,
+        count: rows.length,
         getScrollElement: () => parentRef.current,
         estimateSize: () => 40,
         overscan: 5,
@@ -99,19 +117,19 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
 
         if (!selectedPacket || (!searchChanged && !filterChanged)) return;
 
-        const selectedIndex = sortedPackets.findIndex(p => p.index === selectedPacket.index);
+        const selectedIndex = rows.findIndex(r => r.packet === selectedPacket);
         if (selectedIndex >= 0) {
             // Delay to let the virtualizer recalculate after the list change
             setTimeout(() => {
                 virtualizer.scrollToIndex(selectedIndex, { align: 'center', behavior: 'auto' });
             }, 50);
         }
-    }, [searchTerm, filterVersion, sortedPackets, selectedPacket, virtualizer]);
+    }, [searchTerm, filterVersion, rows, selectedPacket, virtualizer]);
 
     // Auto-scroll when packets change and autoScroll is enabled
     // Use a timeout to debounce rapid updates
     useEffect(() => {
-        if (!autoScroll || sortedPackets.length === 0) return;
+        if (!autoScroll || packets.length === 0) return;
 
         const timeoutId = setTimeout(() => {
             const scrollElement = parentRef.current;
@@ -126,6 +144,20 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
 
         return () => clearTimeout(timeoutId);
     }, [packets.length, autoScroll]);
+
+    const handleRowClick = (row: Row) => {
+        if (row.kind === 'packet') {
+            if (row.packet.subPackets && row.packet.subPackets.length > 0) {
+                setExpandedParentIndex(current => (current === row.packet.index ? null : row.packet.index));
+            } else {
+                setExpandedParentIndex(null);
+            }
+            onSelectPacket(row.packet);
+        } else {
+            setExpandedParentIndex(row.parent.index);
+            onSelectPacket(row.packet);
+        }
+    };
 
     const handleSort = (key: SortKey) => {
         setSortConfig(current => ({
@@ -188,7 +220,10 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                     }}
                 >
                     {virtualizer.getVirtualItems().map((virtualRow) => {
-                        const packet = sortedPackets[virtualRow.index];
+                        const row = rows[virtualRow.index];
+                        const packet = row.packet;
+                        const isSub = row.kind === 'sub';
+                        const displayIndex = isSub ? `${row.parent.index}.${row.subPos + 1}` : String(packet.index);
                         return (
                             <div
                                 key={virtualRow.key}
@@ -200,14 +235,14 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                                     height: `${virtualRow.size}px`,
                                     transform: `translateY(${virtualRow.start}px)`,
                                 }}
-                                className={`virtual-row ${selectedPacket === packet ? 'selected' : ''}`}
-                                onClick={() => onSelectPacket(packet)}
+                                className={`virtual-row ${isSub ? 'sub' : ''} ${selectedPacket === packet ? 'selected' : ''}`}
+                                onClick={() => handleRowClick(row)}
                             >
                                 <div className="virtual-cell font-mono text-sm" style={{ width: '140px' }}>
                                     {packet.timestamp}
                                 </div>
                                 <div className="virtual-cell text-right text-sm" style={{ width: '60px' }}>
-                                    {packet.index}
+                                    {displayIndex}
                                 </div>
                                 <div className="virtual-cell text-center" style={{ width: '100px' }}>
                                     <span className={`source-badge ${packet.source.toLowerCase()}`}>
@@ -222,14 +257,22 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                                     )}
                                 </div>
                                 <div className="virtual-cell text-right font-mono text-sm" style={{ width: '80px' }}>
-                                    {packet.id}
+                                    {isSub && packet.id === 0 ? '' : packet.id}
                                 </div>
                                 <div
                                     className="virtual-cell font-mono text-accent"
-                                    style={{ width: '200px', cursor: 'context-menu' }}
+                                    style={{ width: '200px', cursor: 'context-menu', paddingLeft: isSub ? '22px' : undefined }}
                                     onContextMenu={(e) => handleNameContextMenu(e, packet)}
                                 >
-                                    {packet.packetName}
+                                    {isSub
+                                        ? `↳ ${packet.packetName}`
+                                        : (() => {
+                                            const count = (packet.subPackets && packet.subPackets.length) || 0;
+                                            const hasSubs = count > 0;
+                                            const arrow = hasSubs ? (expandedParentIndex === packet.index ? '▼' : '▶') : '';
+                                            return `${arrow ? arrow + ' ' : ''}${packet.packetName}${hasSubs ? ` (${count})` : ''}`;
+                                        })()
+                                    }
                                 </div>
                                 <div className="virtual-cell text-right font-mono text-sm" style={{ width: '80px' }}>
                                     {packet.length}

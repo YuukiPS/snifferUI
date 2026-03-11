@@ -186,6 +186,14 @@
     background-color: var(--row-hover);
 }
 
+.virtual-row.sub {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.virtual-row.sub:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
 .virtual-row.selected {
     background-color: var(--selection-bg);
     color: white;
