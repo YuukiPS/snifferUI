@@ -548,7 +548,7 @@ function App() {
             dataSource: finalSource,
           };
 
-          if (currentGameType === GAME_GI && (protoName === 'UnionCmdNotify' || protoName === 'CombatInvocationsNotify') && finalDataStr) {
+          if (currentGameType === GAME_GI && (protoName === 'UnionCmdNotify' || protoName === 'CombatInvocationsNotify' || protoName === 'AbilityInvocationsNotify') && finalDataStr) {
             try {
               const parsed = JSON.parse(finalDataStr);
               const subs = buildGiSubPackets({

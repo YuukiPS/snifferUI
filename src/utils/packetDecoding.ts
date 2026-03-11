@@ -39,6 +39,10 @@ export const COMBAT_ARG_TYPE_TO_MESSAGE: Record<string, string> = {
   CombatTypeArgument_ANIMATOR_PARAMETER_CHANGED: 'EvtAnimatorParameterInfo',
 };
 
+export const ABILITY_ARG_TYPE_TO_MESSAGE: Record<string, string> = {
+  // Fill in known mappings if available in your proto set
+};
+
 const isClientish = (src: Packet['source']) => src === 'CLIENT' || src === 'SUB_CLIENT';
 
 export const buildGiSubPackets = ({
@@ -57,10 +61,9 @@ export const buildGiSubPackets = ({
   protoRoot: Root;
   timestamp: string;
   createIndex: (i: number) => number;
-}): Packet[] | undefined => {
+ }): Packet[] | undefined => {
   const attachNestedSubPackets = (pkt: Packet) => {
-    if (pkt.dataSource !== 'BINARY') return;
-    if (pkt.packetName !== 'UnionCmdNotify' && pkt.packetName !== 'CombatInvocationsNotify') return;
+    if (pkt.packetName !== 'UnionCmdNotify' && pkt.packetName !== 'CombatInvocationsNotify' && pkt.packetName !== 'AbilityInvocationsNotify') return;
     try {
       const parsed = JSON.parse(pkt.data);
       const nested = buildGiSubPackets({
@@ -159,6 +162,59 @@ export const buildGiSubPackets = ({
           binary: subBinary,
           dataSource: subSource,
         });
+      } catch {}
+    }
+    return subs.length > 0 ? subs : undefined;
+  }
+
+  if (parentName === 'AbilityInvocationsNotify') {
+    const list = getFirstArrayProp(decodedObj, ['invokes', 'invokesList', 'invokes_list']);
+    if (!list || list.length === 0) return undefined;
+    const subs: Packet[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const inv = list[i] as any;
+      try {
+        const argType: string = String(inv.argumentType || '');
+        const forwardType: string = String(inv.forwardType || '');
+        const entityId = inv.entityId !== undefined ? Number(inv.entityId) : undefined;
+        const subBinary = getBase64String(inv.abilityData);
+        if (!subBinary) continue;
+        const mappedName = ABILITY_ARG_TYPE_TO_MESSAGE[argType];
+        const guessName = mappedName || argType || 'UnknownAbility';
+        let decodedPayload: any = inv;
+        let subSource: 'BINARY' | 'JSON' = 'JSON';
+        try {
+          const buf = decodeBase64ToBytes(subBinary);
+          if (mappedName) {
+            const Msg = protoRoot.lookupType(mappedName);
+            decodedPayload = Msg.decode(buf).toJSON();
+            subSource = 'BINARY';
+          } else {
+            decodedPayload = { unknownDecoded: decodeUnknownProtobuf(buf) };
+            subSource = 'BINARY';
+          }
+        } catch {
+          decodedPayload = inv;
+          subSource = 'JSON';
+        }
+        const pkt: Packet = {
+          timestamp,
+          source: isClientish(parent.source) ? 'SUB_CLIENT' : 'SUB_SERVER',
+          id: 0,
+          packetName: guessName,
+          length: base64ByteLength(subBinary),
+          index: createIndex(i),
+          data: JSON.stringify({
+            argumentType: argType,
+            forwardType: forwardType,
+            entityId,
+            payload: decodedPayload,
+          }),
+          binary: subBinary,
+          dataSource: subSource,
+        };
+        attachNestedSubPackets(pkt);
+        subs.push(pkt);
       } catch {}
     }
     return subs.length > 0 ? subs : undefined;
