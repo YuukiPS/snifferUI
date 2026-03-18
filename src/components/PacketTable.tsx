@@ -79,11 +79,48 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
         subPos?: number;
     };
 
+    const effectiveExpandedIds = useMemo(() => {
+        const term = (searchTerm || '').trim().toLowerCase();
+        if (!term) return expandedIds;
+
+        const matchesSelf = (p: Packet) => {
+            const content = typeof p.data === 'string' ? p.data : JSON.stringify(p.data);
+            return (
+                (p.packetName || '').toLowerCase().includes(term) ||
+                String(p.id ?? '').includes(term) ||
+                String(p.index ?? '').includes(term) ||
+                (content || '').toLowerCase().includes(term)
+            );
+        };
+
+        const hasMatchingDescendant = (p: Packet, seen: Set<number>): boolean => {
+            if (seen.has(p.index)) return false;
+            seen.add(p.index);
+            if (!p.subPackets || p.subPackets.length === 0) return false;
+            for (const sub of p.subPackets) {
+                if (matchesSelf(sub)) return true;
+                if (hasMatchingDescendant(sub, seen)) return true;
+            }
+            return false;
+        };
+
+        const auto = new Set<number>();
+        for (const p of sortedPackets) {
+            if (p.subPackets && p.subPackets.length > 0 && (matchesSelf(p) || hasMatchingDescendant(p, new Set()))) {
+                auto.add(p.index);
+            }
+        }
+
+        const next = new Set(expandedIds);
+        for (const id of auto) next.add(id);
+        return next;
+    }, [expandedIds, searchTerm, sortedPackets]);
+
     const rows = useMemo<Row[]>(() => {
         const out: Row[] = [];
         const pushRecursive = (pkt: Packet, depth: number, path: string, parent?: Packet, subPos?: number) => {
             out.push({ packet: pkt, depth, path, parent, subPos });
-            if (expandedIds.has(pkt.index) && pkt.subPackets && pkt.subPackets.length > 0) {
+            if (effectiveExpandedIds.has(pkt.index) && pkt.subPackets && pkt.subPackets.length > 0) {
                 for (let i = 0; i < pkt.subPackets.length; i++) {
                     const sub = pkt.subPackets[i];
                     const subPath = `${path}.${i + 1}`;
@@ -93,7 +130,7 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
         };
         for (const p of sortedPackets) pushRecursive(p, 0, String(p.index));
         return out;
-    }, [sortedPackets, expandedIds]);
+    }, [sortedPackets, effectiveExpandedIds]);
 
     const virtualizer = useVirtualizer({
         count: rows.length,
@@ -273,7 +310,7 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                                     {(() => {
                                         const count = (packet.subPackets && packet.subPackets.length) || 0;
                                         const hasSubs = count > 0;
-                                        const arrow = hasSubs ? (expandedIds.has(packet.index) ? '▼' : '▶') : '';
+                                        const arrow = hasSubs ? (effectiveExpandedIds.has(packet.index) ? '▼' : '▶') : '';
                                         const prefix = isSub ? '↳ ' : '';
                                         return `${prefix}${arrow ? arrow + ' ' : ''}${packet.packetName}${hasSubs ? ` (${count})` : ''}`;
                                     })()}

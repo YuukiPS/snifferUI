@@ -353,7 +353,7 @@ function App() {
     // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      result = result.filter(p => {
+      const matchesSelf = (p: Packet) => {
         if (searchScope === 'ALL') {
           return (
             (p.packetName || '').toLowerCase().includes(term) ||
@@ -361,17 +361,28 @@ function App() {
             (p.index?.toString() || '').includes(term) ||
             ((typeof p.data === 'string' ? p.data : JSON.stringify(p.data)) || '').toLowerCase().includes(term)
           );
-        } else if (searchScope === 'NAME') {
-          return (p.packetName || '').toLowerCase().includes(term);
-        } else if (searchScope === 'ID') {
-          return (p.id?.toString() || '').includes(term);
-        } else if (searchScope === 'SEQ') {
-          return (p.index?.toString() || '').includes(term);
-        } else if (searchScope === 'CONTENT') {
+        }
+        if (searchScope === 'NAME') return (p.packetName || '').toLowerCase().includes(term);
+        if (searchScope === 'ID') return (p.id?.toString() || '').includes(term);
+        if (searchScope === 'SEQ') return (p.index?.toString() || '').includes(term);
+        if (searchScope === 'CONTENT') {
           return ((typeof p.data === 'string' ? p.data : JSON.stringify(p.data)) || '').toLowerCase().includes(term);
         }
         return false;
-      });
+      };
+
+      const matchesTree = (p: Packet, seen: Set<number>): boolean => {
+        if (seen.has(p.index)) return false;
+        seen.add(p.index);
+        if (matchesSelf(p)) return true;
+        if (!p.subPackets || p.subPackets.length === 0) return false;
+        for (const sub of p.subPackets) {
+          if (matchesTree(sub, seen)) return true;
+        }
+        return false;
+      };
+
+      result = result.filter(p => matchesTree(p, new Set()));
     }
 
     return result;
