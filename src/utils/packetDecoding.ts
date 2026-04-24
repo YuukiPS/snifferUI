@@ -96,7 +96,7 @@ export const buildGiSubPackets = ({
           try {
             const subBuf = decodeBase64ToBytes(subBinary);
             const SubMessage = protoRoot.lookupType(subProtoName);
-            const subDecoded = SubMessage.decode(subBuf).toJSON();
+            const subDecoded = SubMessage.toObject(SubMessage.decode(subBuf), { longs: String, enums: String, bytes: String, defaults: true, arrays: true });
             subDataStr = JSON.stringify(subDecoded);
             subSource = 'BINARY';
           } catch {
@@ -141,7 +141,7 @@ export const buildGiSubPackets = ({
           const buf = decodeBase64ToBytes(subBinary);
           if (mappedName) {
             const Msg = protoRoot.lookupType(mappedName);
-            decodedPayload = Msg.decode(buf).toJSON();
+            decodedPayload = Msg.toObject(Msg.decode(buf), { longs: String, enums: String, bytes: String, defaults: true, arrays: true });
             subSource = 'BINARY';
           } else {
             decodedPayload = { unknownDecoded: decodeUnknownProtobuf(buf) };
@@ -187,7 +187,7 @@ export const buildGiSubPackets = ({
           const buf = decodeBase64ToBytes(subBinary);
           if (mappedName) {
             const Msg = protoRoot.lookupType(mappedName);
-            decodedPayload = Msg.decode(buf).toJSON();
+            decodedPayload = Msg.toObject(Msg.decode(buf), { longs: String, enums: String, bytes: String, defaults: true, arrays: true });
             subSource = 'BINARY';
           } else {
             decodedPayload = { unknownDecoded: decodeUnknownProtobuf(buf) };

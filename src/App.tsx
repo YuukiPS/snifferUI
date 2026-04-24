@@ -1,5 +1,11 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import * as protobuf from 'protobufjs';
+import Long from 'long';
+
+// Configure protobufjs to use long.js for 64-bit integers
+protobuf.util.Long = Long;
+protobuf.configure();
+
 import './App.css';
 import { Sidebar } from './components/Sidebar';
 import { PacketTable } from './components/PacketTable';
@@ -231,7 +237,7 @@ function App() {
             // protoRootRef.current is already updated with the new proto
             const Message = protoRootRef.current.lookupType(protoName); 
             
-            const decodedMessage = Message.decode(buffer).toJSON();
+            const decodedMessage = Message.toObject(Message.decode(buffer), { longs: String, enums: String, bytes: String, defaults: true, arrays: true });
             const subs = currentGameType === GAME_GI ? buildGiSubPackets({
               parent: packet,
               parentName: protoName,
@@ -280,40 +286,41 @@ function App() {
 
   const handleUpload = (data: any[]): { success: boolean; packetCount: number; error?: string } => {
     try {
-      const mappedPackets: Packet[] = data.map((item: any, index: number) => {
+      const mapItemToPacket = (item: any, index: number): Packet => {
         let parsedData = "";
         let dataSource: 'BINARY' | 'JSON' = 'JSON';
+        let decoded = false;
+
+        const itemId = item.id !== undefined ? item.id : item.packetId;
+        const protoName = item.packetName || cmdIdToMessageMap[itemId];
+        const binary = item.binary;
 
         // Try decoding binary first if available
-        let decoded = false;
-        if (item.binary) {
+        if (binary && protoName) {
           try {
-            const protoName = item.packetName || cmdIdToMessageMap[item.packetId];
-            if (protoName) {
-              const buffer = Uint8Array.from(atob(item.binary), c => c.charCodeAt(0));
-              const Message = protoRootRef.current.lookupType(protoName);
-              const decodedMessage = Message.decode(buffer).toJSON();
-              parsedData = JSON.stringify(decodedMessage);
-              dataSource = 'BINARY';
-              decoded = true;
-            }
+            const buffer = decodeBase64ToBytes(binary);
+            const Message = protoRootRef.current.lookupType(protoName);
+            const decodedMessage = Message.toObject(Message.decode(buffer), { longs: String, enums: String, bytes: String, defaults: true, arrays: true });
+            parsedData = JSON.stringify(decodedMessage);
+            dataSource = 'BINARY';
+            decoded = true;
           } catch (e) {
-            console.warn(`Failed to decode binary for packet ${item.packetId}, falling back to JSON`, e);
+            console.warn(`Failed to decode binary for packet ${itemId}, falling back to JSON`, e);
           }
         }
 
         // If binary decoding failed or wasn't possible, use item.data
-        if (!decoded && item.data) {
-          if (typeof item.data === 'string') {
-            parsedData = item.data;
-          } else {
-            parsedData = JSON.stringify(item.data);
+        if (!decoded) {
+          if (item.data) {
+            parsedData = typeof item.data === 'string' ? item.data : JSON.stringify(item.data);
           }
           dataSource = 'JSON';
         }
 
-        return {
-          timestamp: new Date(item.time).toLocaleTimeString(),
+        const timestamp = item.timestamp || (item.time ? new Date(item.time).toLocaleTimeString() : new Date().toLocaleTimeString());
+
+        const pkt: Packet = {
+          timestamp,
           source: (() => {
             const src = String(item.source || '').toUpperCase();
             if (src === 'CLIENT' || src === 'SERVER' || src === 'SUB_CLIENT' || src === 'SUB_SERVER') {
@@ -321,15 +328,39 @@ function App() {
             }
             return 'SERVER';
           })(),
-          id: item.packetId,
-          packetName: item.packetName,
-          length: item.length,
+          id: itemId,
+          packetName: protoName || 'Unknown',
+          length: item.length || (binary ? decodeBase64ToBytes(binary).length : 0),
           index: index,
           data: parsedData,
-          binary: item.binary,
-          dataSource: dataSource
+          binary: binary,
+          dataSource: dataSource,
         };
-      });
+
+        // Rebuild sub-packets if GI
+        if (currentGameType === GAME_GI && (protoName === 'UnionCmdNotify' || protoName === 'CombatInvocationsNotify' || protoName === 'AbilityInvocationsNotify') && decoded) {
+          try {
+            const parsed = JSON.parse(parsedData);
+            const subs = buildGiSubPackets({
+              parent: pkt,
+              parentName: protoName,
+              decodedObj: parsed,
+              cmdIdToMessageMap: cmdIdToMessageMap,
+              protoRoot: protoRootRef.current,
+              timestamp,
+              createIndex: (i) => index * 1000 + (i + 1),
+            });
+            if (subs && subs.length > 0) pkt.subPackets = subs;
+          } catch {}
+        } else if (item.subPackets && Array.isArray(item.subPackets)) {
+          // Recursively map sub-packets if they exist in JSON and weren't rebuilt
+          pkt.subPackets = item.subPackets.map((s: any, i: number) => mapItemToPacket(s, index * 1000 + (i + 1)));
+        }
+
+        return pkt;
+      };
+
+      const mappedPackets = data.map((item, index) => mapItemToPacket(item, index));
       setPackets(mappedPackets);
       // Persist uploaded packets to IndexedDB (replace old data)
       clearAllPackets().then(() => savePackets(mappedPackets)).then(refreshStorageStats);
@@ -516,7 +547,7 @@ function App() {
               // Decode binary using protobuf
               const buffer = decodeBase64ToBytes(packetData.binary);
               const Message = protoRootRef.current.lookupType(protoName);
-              const decodedMessage = Message.decode(buffer).toJSON();
+              const decodedMessage = Message.toObject(Message.decode(buffer), { longs: String, enums: String, bytes: String, defaults: true, arrays: true });
               finalDataStr = JSON.stringify(decodedMessage);
               finalSource = 'BINARY';
               decodedSuccess = true;
