@@ -85,19 +85,31 @@ export async function savePacket(packet: Packet): Promise<void> {
 /**
  * Load all packets from IndexedDB, sorted by index.
  */
-export async function loadAllPackets(): Promise<Packet[]> {
+export async function loadAllPackets(maxCount: number = Infinity): Promise<Packet[]> {
   const db = await openDB();
   const tx = db.transaction(STORE_NAME, 'readonly');
   const store = tx.objectStore(STORE_NAME);
-  const request = store.getAll();
+  const request = store.openCursor(null, 'next');
 
   return new Promise((resolve, reject) => {
+    const packets: Packet[] = [];
+
     request.onsuccess = () => {
-      const packets = request.result as Packet[];
-      // Sort by index to maintain order
-      packets.sort((a, b) => a.index - b.index);
-      resolve(packets);
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(packets);
+        return;
+      }
+
+      packets.push(cursor.value as Packet);
+      if (packets.length >= maxCount) {
+        resolve(packets);
+        return;
+      }
+
+      cursor.continue();
     };
+
     request.onerror = () => reject(request.error);
   });
 }
