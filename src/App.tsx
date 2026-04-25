@@ -654,17 +654,77 @@ function App() {
     return rebuildFromProto(protoText);
   };
 
-  const handleSave = () => {
-    const jsonString = JSON.stringify(packets, null, 2);
-    const blob = new Blob([jsonString], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `packets_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleSave = async () => {
+    if (!packets.length) {
+      alert('No packets to save.');
+      return;
+    }
+
+    const fileName = `packets_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    const encoder = new TextEncoder();
+
+    const writePacketStream = async (writable: any) => {
+      await writable.write(encoder.encode('[\n'));
+      for (let i = 0; i < packets.length; i += 1) {
+        const packetJson = JSON.stringify(packets[i], null, 2);
+        const separator = i === 0 ? '' : ',\n';
+        await writable.write(encoder.encode(separator + packetJson));
+      }
+      await writable.write(encoder.encode('\n]'));
+      await writable.close();
+    };
+
+    const saveUsingFilePicker = async () => {
+      const picker = await (window as any).showSaveFilePicker?.({
+        suggestedName: fileName,
+        types: [
+          {
+            description: 'JSON',
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+
+      if (!picker) {
+        return false;
+      }
+
+      const writable = await picker.createWritable();
+      await writePacketStream(writable);
+      return true;
+    };
+
+    const saveUsingBlob = async () => {
+      const chunks: BlobPart[] = [];
+      chunks.push('[\n');
+      for (let i = 0; i < packets.length; i += 1) {
+        const packetJson = JSON.stringify(packets[i], null, 2);
+        const separator = i === 0 ? '' : ',\n';
+        chunks.push(separator + packetJson);
+      }
+      chunks.push('\n]');
+
+      const blob = new Blob(chunks, { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      return true;
+    };
+
+    try {
+      const saved = await saveUsingFilePicker();
+      if (!saved) {
+        await saveUsingBlob();
+      }
+    } catch (err) {
+      console.error('Save failed:', err);
+      alert('Failed to save packets. Please try again or split the export into smaller files.');
+    }
   };
 
   const handleSelectDatabase = async (name: string) => {
