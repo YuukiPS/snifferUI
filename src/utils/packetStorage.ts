@@ -48,6 +48,72 @@ function openDB(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
+function getIndexedDbName(name: string): string {
+  return name === 'default' ? DEFAULT_DB_NAME : `packet_monitor_db_${name}`;
+}
+
+function openDBByName(name: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(getIndexedDbName(name), DB_VERSION);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'index' });
+      }
+    };
+
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+
+    request.onerror = () => {
+      reject(request.error);
+    };
+  });
+}
+
+export async function estimateDatabaseSize(name: string): Promise<number> {
+  const db = await openDBByName(name);
+  const tx = db.transaction(STORE_NAME, 'readonly');
+  const store = tx.objectStore(STORE_NAME);
+  const request = store.openCursor();
+  let bytes = 0;
+  const encoder = new TextEncoder();
+
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        return;
+      }
+
+      try {
+        const payload = JSON.stringify(cursor.value);
+        bytes += encoder.encode(payload).length;
+      } catch (err) {
+        console.warn('Failed to stringify packet for size estimate:', err);
+      }
+
+      cursor.continue();
+    };
+
+    request.onerror = () => {
+      reject(request.error);
+    };
+
+    tx.oncomplete = () => {
+      db.close();
+      resolve(bytes);
+    };
+
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
+}
+
 /**
  * Save a batch of packets to IndexedDB.
  */

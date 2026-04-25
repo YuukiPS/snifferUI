@@ -26,6 +26,7 @@ import {
   getStorageEstimate,
   formatBytes,
   setDatabaseName,
+  estimateDatabaseSize,
 } from './utils/packetStorage';
 import { buildGiSubPackets, decodeBase64ToBytes } from './utils/packetDecoding';
 
@@ -53,6 +54,7 @@ function App() {
     const saved = localStorage.getItem('packet_monitor_databases');
     return saved ? JSON.parse(saved) : [{ name: 'default', gameType: 0 }];
   });
+  const [databaseSizes, setDatabaseSizes] = useState<Record<string, number | null>>({});
 
   const [isServerModalOpen, setIsServerModalOpen] = useState(false);
   const [isProtoModalOpen, setIsProtoModalOpen] = useState(false);
@@ -177,6 +179,36 @@ function App() {
     const interval = setInterval(refreshStorageStats, 5000);
     return () => clearInterval(interval);
   }, [refreshStorageStats]);
+
+  useEffect(() => {
+    if (!isDatabaseModalOpen) {
+      return;
+    }
+
+    let active = true;
+    const loadDatabaseSizes = async () => {
+      const sizes: Record<string, number | null> = {};
+      await Promise.all(databases.map(async (db) => {
+        try {
+          sizes[db.name] = await estimateDatabaseSize(db.name);
+        } catch (err) {
+          console.warn(`Failed to estimate size for database '${db.name}':`, err);
+          sizes[db.name] = null;
+        }
+      }));
+
+      if (active) {
+        setDatabaseSizes(sizes);
+      }
+    };
+
+    setDatabaseSizes({});
+    loadDatabaseSizes();
+
+    return () => {
+      active = false;
+    };
+  }, [isDatabaseModalOpen, databases]);
 
   // Persist hiddenNames
   useEffect(() => {
@@ -943,6 +975,7 @@ function App() {
         isOpen={isDatabaseModalOpen}
         onClose={() => setIsDatabaseModalOpen(false)}
         databases={databases}
+        databaseSizes={databaseSizes}
         currentDatabase={currentDatabase}
         onSelectDatabase={handleSelectDatabase}
         onCreateDatabase={handleCreateDatabase}

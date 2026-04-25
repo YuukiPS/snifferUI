@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import './DatabaseModal.css';
+import { formatBytes } from '../utils/packetStorage';
 
 interface Database {
   name: string;
@@ -10,6 +11,7 @@ interface DatabaseModalProps {
   isOpen: boolean;
   onClose: () => void;
   databases: Database[];
+  databaseSizes: Record<string, number | null>;
   currentDatabase: string;
   onSelectDatabase: (name: string) => void;
   onCreateDatabase: (name: string, gameType: number) => void;
@@ -19,6 +21,7 @@ export const DatabaseModal = ({
   isOpen,
   onClose,
   databases,
+  databaseSizes,
   currentDatabase,
   onSelectDatabase,
   onCreateDatabase,
@@ -78,7 +81,16 @@ export const DatabaseModal = ({
             >
               <div className="database-info">
                 <span className="database-name">{db.name}</span>
-                <span className="database-type">{getGameTypeName(db.gameType)}</span>
+                <div className="database-meta">
+                  <span className="database-type">{getGameTypeName(db.gameType)}</span>
+                  <span className="database-size">
+                    {db.name in databaseSizes
+                      ? databaseSizes[db.name] === null
+                        ? 'Unknown'
+                        : formatBytes(databaseSizes[db.name]!)
+                      : 'Loading...'}
+                  </span>
+                </div>
               </div>
               {currentDatabase === db.name && <span className="current-badge">✓</span>}
             </div>
