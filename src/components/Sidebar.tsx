@@ -5,6 +5,7 @@ interface SidebarProps {
     onClear: () => void;
     onStart: () => void;
     isMonitoring: boolean;
+    isClearing: boolean;
     onProtoClick: () => void;
     onJsonClick: () => void;
     onPcapClick: () => void;
@@ -14,7 +15,7 @@ interface SidebarProps {
     onSave: () => void;
 }
 
-export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, onProtoClick, onJsonClick, onPcapClick, onDatabaseClick, autoScroll, onAutoScrollToggle, onSave }: SidebarProps) => {
+export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, isClearing, onProtoClick, onJsonClick, onPcapClick, onDatabaseClick, autoScroll, onAutoScrollToggle, onSave }: SidebarProps) => {
 
 
     return (
@@ -49,8 +50,12 @@ export const Sidebar = ({ onFilterClick, onClear, onStart, isMonitoring, onProto
             </div>
 
             <div className="sidebar-group bottom">
-                <button className="sidebar-btn stop" title="Stop/Clear" onClick={onClear}>
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+                <button className={`sidebar-btn stop ${isClearing ? 'clearing' : ''}`} title={isClearing ? 'Clearing...' : 'Stop/Clear'} onClick={onClear} disabled={isClearing}>
+                    {isClearing ? (
+                      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" /></svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+                    )}
                 </button>
                 <button
                     className={`sidebar-btn scroll ${autoScroll ? 'active' : ''}`}

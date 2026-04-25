@@ -23,6 +23,7 @@ import {
   clearAllPackets,
   queuePacketSave,
   flushWriteBuffer,
+  resetWriteBuffer,
   getStorageEstimate,
   formatBytes,
   setDatabaseName,
@@ -60,6 +61,7 @@ function App() {
   const [isProtoModalOpen, setIsProtoModalOpen] = useState(false);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
   const [isPcapModalOpen, setIsPcapModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [serverAddress, setServerAddress] = useState(() => {
     return localStorage.getItem('packet_monitor_server_address') || "http://localhost:1985";
   });
@@ -507,18 +509,22 @@ function App() {
   };
 
   const handleClear = async () => {
+    setIsClearing(true);
     setPackets([]);
     setSelectedPacket(null);
     globalPacketIndexRef.current = 0;
-    // Clear persisted packets from IndexedDB
+
     try {
       await flushWriteBuffer();
-      console.log(`Clearing packets for database: ${currentDatabase}`);
+      resetWriteBuffer();
+      console.log(`Clearing packets for current database: ${currentDatabase}`);
       await clearAllPackets();
       await refreshStorageStats();
-      console.log('Cleared all persisted packets from IndexedDB.');
+      console.log('Cleared packets from current database.');
     } catch (err) {
       console.error('Failed to clear IndexedDB:', err);
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -792,6 +798,7 @@ function App() {
         onClear={handleClear}
         onStart={handleStartButton}
         isMonitoring={isMonitoring}
+        isClearing={isClearing}
         onProtoClick={() => setIsProtoModalOpen(true)}
         onJsonClick={() => setIsJsonModalOpen(true)}
         onPcapClick={() => setIsPcapModalOpen(true)}

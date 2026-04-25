@@ -294,3 +294,12 @@ export async function flushWriteBuffer(): Promise<void> {
     console.error('Failed to flush packet write buffer:', err);
   }
 }
+
+export function resetWriteBuffer(): void {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  writeBuffer = [];
+  flushCallback = null;
+}
