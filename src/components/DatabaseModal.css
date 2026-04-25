@@ -149,3 +149,36 @@ button {
   background-color: #bbdefb;
   cursor: not-allowed;
 }
+
+.database-loading-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background-color: #eef2ff;
+  color: #1a202c;
+  font-size: 0.9em;
+}
+
+.database-loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 3px solid rgba(0, 0, 0, 0.15);
+  border-top-color: #3182ce;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.database-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

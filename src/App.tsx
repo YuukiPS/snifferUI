@@ -56,6 +56,9 @@ function App() {
     return saved ? JSON.parse(saved) : [{ name: 'default', gameType: 0 }];
   });
   const [databaseSizes, setDatabaseSizes] = useState<Record<string, number | null>>({});
+  const [isLoadingDatabase, setIsLoadingDatabase] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [pendingDatabaseSelection, setPendingDatabaseSelection] = useState<string | null>(null);
 
   const [isServerModalOpen, setIsServerModalOpen] = useState(false);
   const [isProtoModalOpen, setIsProtoModalOpen] = useState(false);
@@ -121,58 +124,73 @@ function App() {
   // Load packets from IndexedDB when database changes
   useEffect(() => {
     const init = async () => {
-      // 0. Update DB name
-      const dbName = currentDatabase === 'default' ? 'packet_monitor_db' : `packet_monitor_db_${currentDatabase}`;
-      setDatabaseName(dbName);
-      
-      // Clear current state first
-      setPackets([]);
-      setSelectedPacket(null);
-      globalPacketIndexRef.current = 0;
-      setCmdIdToMessageMap({});
-      protoRootRef.current = new protobuf.Root();
+      setIsLoadingDatabase(true);
+      setLoadingMessage(pendingDatabaseSelection
+        ? `Switching to "${currentDatabase}"...`
+        : `Restoring packets for "${currentDatabase}"...`
+      );
 
-      // 1. Restore persisted packets
-      let storedPackets: Packet[] = [];
       try {
-        const stored = await loadAllPackets();
-        if (stored.length > 0) {
-          storedPackets = stored;
-          setPackets(stored);
-          const maxIndex = stored.reduce((max, p) => Math.max(max, p.index), 0);
-          globalPacketIndexRef.current = maxIndex + 1;
-          console.log(`Restored ${stored.length} packets from IndexedDB (next index: ${globalPacketIndexRef.current})`);
-        }
-      } catch (err) {
-        console.warn('Failed to load packets from IndexedDB:', err);
-      }
+        // 0. Update DB name
+        const dbName = currentDatabase === 'default' ? 'packet_monitor_db' : `packet_monitor_db_${currentDatabase}`;
+        setDatabaseName(dbName);
+        
+        // Clear current state first
+        setPackets([]);
+        setSelectedPacket(null);
+        globalPacketIndexRef.current = 0;
+        setCmdIdToMessageMap({});
+        protoRootRef.current = new protobuf.Root();
 
-      // 2. Refresh storage stats
-      await refreshStorageStats();
-
-      // 3. Load proto for this DB
-      const protoKey = currentDatabase === 'default' ? 'protoFileContent' : `protoFileContent_${currentDatabase}`;
-      const savedProto = localStorage.getItem(protoKey);
-      if (savedProto) {
-        console.log("Found saved proto file. Rebuilding proto...");
-        // Pass storedPackets to ensure we re-decode the newly loaded packets with the proto map
-        rebuildFromProto(savedProto, storedPackets);
-      }
-
-      // 4. Check server status (only on initial load effectively, or if connection lost)
-      if (!isMonitoring) {
+        // 1. Restore persisted packets
+        let storedPackets: Packet[] = [];
         try {
-          const baseUrl = serverAddress.replace(/\/$/, "");
-          const res = await fetch(`${baseUrl}/api/status`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.is_running) {
-              console.log("Server is running, resuming monitoring...");
-              startMonitoring(baseUrl);
-            }
+          const stored = await loadAllPackets();
+          if (stored.length > 0) {
+            storedPackets = stored;
+            setPackets(stored);
+            const maxIndex = stored.reduce((max, p) => Math.max(max, p.index), 0);
+            globalPacketIndexRef.current = maxIndex + 1;
+            console.log(`Restored ${stored.length} packets from IndexedDB (next index: ${globalPacketIndexRef.current})`);
           }
         } catch (err) {
-          console.log("Server check failed (server might be down):", err);
+          console.warn('Failed to load packets from IndexedDB:', err);
+        }
+
+        // 2. Refresh storage stats
+        await refreshStorageStats();
+
+        // 3. Load proto for this DB
+        const protoKey = currentDatabase === 'default' ? 'protoFileContent' : `protoFileContent_${currentDatabase}`;
+        const savedProto = localStorage.getItem(protoKey);
+        if (savedProto) {
+          console.log("Found saved proto file. Rebuilding proto...");
+          // Pass storedPackets to ensure we re-decode the newly loaded packets with the proto map
+          rebuildFromProto(savedProto, storedPackets);
+        }
+
+        // 4. Check server status (only on initial load effectively, or if connection lost)
+        if (!isMonitoring) {
+          try {
+            const baseUrl = serverAddress.replace(/\/$/, "");
+            const res = await fetch(`${baseUrl}/api/status`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.is_running) {
+                console.log("Server is running, resuming monitoring...");
+                startMonitoring(baseUrl);
+              }
+            }
+          } catch (err) {
+            console.log("Server check failed (server might be down):", err);
+          }
+        }
+      } finally {
+        setIsLoadingDatabase(false);
+        setLoadingMessage('');
+        if (pendingDatabaseSelection === currentDatabase) {
+          setPendingDatabaseSelection(null);
+          setIsDatabaseModalOpen(false);
         }
       }
     };
@@ -761,19 +779,29 @@ function App() {
   };
 
   const handleSelectDatabase = async (name: string) => {
-    // Flush current write buffer before switching
-    await flushWriteBuffer();
-    
-    // Load hidden names for the new database
-    const hiddenKey = name === 'default' ? 'packet_monitor_hidden_names' : `packet_monitor_hidden_names_${name}`;
-    const savedHidden = localStorage.getItem(hiddenKey);
-    const newHiddenNames = savedHidden ? JSON.parse(savedHidden) : [];
-    
-    // Update state in batch (React 18 handles this automatically in async functions too)
-    setHiddenNames(newHiddenNames);
-    setCurrentDatabase(name);
-    localStorage.setItem('packet_monitor_current_db', name);
-    setIsDatabaseModalOpen(false);
+    if (name === currentDatabase) {
+      return;
+    }
+
+    setPendingDatabaseSelection(name);
+    setIsLoadingDatabase(true);
+    setLoadingMessage(`Switching to "${name}"...`);
+
+    try {
+      await flushWriteBuffer();
+
+      const hiddenKey = name === 'default' ? 'packet_monitor_hidden_names' : `packet_monitor_hidden_names_${name}`;
+      const savedHidden = localStorage.getItem(hiddenKey);
+      const newHiddenNames = savedHidden ? JSON.parse(savedHidden) : [];
+      setHiddenNames(newHiddenNames);
+      setCurrentDatabase(name);
+      localStorage.setItem('packet_monitor_current_db', name);
+    } catch (err) {
+      console.error('Failed to switch database:', err);
+      setIsLoadingDatabase(false);
+      setLoadingMessage('');
+      setPendingDatabaseSelection(null);
+    }
   };
 
   const handleCreateDatabase = async (name: string, gameType: number) => {
@@ -873,6 +901,15 @@ function App() {
           }}>
             <h2>Please upload JSON or Start Monitoring</h2>
             <p style={{ marginTop: '10px', fontSize: '0.9em' }}>Click the upload icon or play button to get started.</p>
+          </div>
+        )}
+
+        {isLoadingDatabase && (
+          <div className="database-loading-overlay">
+            <div className="database-loading-card">
+              <div className="database-loading-spinner" />
+              <div>{loadingMessage || 'Loading database...'}</div>
+            </div>
           </div>
         )}
       </div>
@@ -981,6 +1018,8 @@ function App() {
         currentDatabase={currentDatabase}
         onSelectDatabase={handleSelectDatabase}
         onCreateDatabase={handleCreateDatabase}
+        isLoadingDatabase={isLoadingDatabase}
+        pendingDatabaseSelection={pendingDatabaseSelection}
       />
     </div>
   );

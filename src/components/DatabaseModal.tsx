@@ -15,6 +15,8 @@ interface DatabaseModalProps {
   currentDatabase: string;
   onSelectDatabase: (name: string) => void;
   onCreateDatabase: (name: string, gameType: number) => void;
+  isLoadingDatabase: boolean;
+  pendingDatabaseSelection: string | null;
 }
 
 export const DatabaseModal = ({
@@ -25,6 +27,8 @@ export const DatabaseModal = ({
   currentDatabase,
   onSelectDatabase,
   onCreateDatabase,
+  isLoadingDatabase,
+  pendingDatabaseSelection,
 }: DatabaseModalProps) => {
   const [newDbName, setNewDbName] = useState('');
   const [newDbGameType, setNewDbGameType] = useState<number>(0);
@@ -71,11 +75,10 @@ export const DatabaseModal = ({
           {databases.map((db) => (
             <div
               key={db.name}
-              className={`database-item ${currentDatabase === db.name ? 'active' : ''}`}
+              className={`database-item ${currentDatabase === db.name ? 'active' : ''} ${isLoadingDatabase ? 'disabled' : ''}`}
               onClick={() => {
-                if (currentDatabase !== db.name) {
+                if (!isLoadingDatabase && currentDatabase !== db.name) {
                   onSelectDatabase(db.name);
-                  onClose();
                 }
               }}
             >
@@ -106,6 +109,7 @@ export const DatabaseModal = ({
               value={newDbName}
               onChange={(e) => setNewDbName(e.target.value)}
               placeholder="Enter database name"
+              disabled={isLoadingDatabase}
             />
           </div>
           <div className="input-group">
@@ -113,6 +117,7 @@ export const DatabaseModal = ({
             <select
               value={newDbGameType}
               onChange={(e) => setNewDbGameType(Number(e.target.value))}
+              disabled={isLoadingDatabase}
             >
               <option value={0}>Unknown</option>
               <option value={1}>Genshin Impact</option>
@@ -122,12 +127,19 @@ export const DatabaseModal = ({
           
           {error && <div className="error-message" style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
 
+          {isLoadingDatabase && (
+            <div className="database-loading-status">
+              <span className="database-loading-spinner" />
+              {pendingDatabaseSelection ? `Switching to "${pendingDatabaseSelection}"...` : 'Loading database...'}
+            </div>
+          )}
+
           <div className="modal-actions">
-            <button className="cancel-btn" onClick={onClose}>Cancel</button>
+            <button className="cancel-btn" onClick={onClose} disabled={isLoadingDatabase}>Cancel</button>
             <button
               className="create-btn"
               onClick={handleCreate}
-              disabled={!newDbName.trim()}
+              disabled={isLoadingDatabase || !newDbName.trim()}
             >
               Create & Switch
             </button>
