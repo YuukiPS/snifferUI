@@ -201,7 +201,7 @@ function App() {
 
     const newMap: { [cmdId: number]: string } = {};
     let pendingCmdId: number | null = null;
-    const cmdIdRegex = /^\/\/\s*CmdId:\s*(\d+)/;
+    const cmdIdRegex = /^\/\/\s*(?:CmdId|CmdID):\s*(\d+)/i;
     const messageRegex = /^message\s+(\w+)/;
     const lines = protoText.split(/\r?\n/);
 
@@ -291,7 +291,7 @@ function App() {
         let dataSource: 'BINARY' | 'JSON' = 'JSON';
         let decoded = false;
 
-        const itemId = item.id !== undefined ? item.id : item.packetId;
+        const itemId = item.id !== undefined ? item.id : (item.packetId !== undefined ? item.packetId : (item.CmdID !== undefined ? item.CmdID : item.CmdId));
         const protoName = item.packetName || cmdIdToMessageMap[itemId];
         const binary = item.binary;
 
@@ -539,7 +539,8 @@ function App() {
           let finalSource: 'BINARY' | 'JSON' = 'JSON';
           let decodedSuccess = false;
 
-          const protoName = cmdIdToMessageMapRef.current[packetData.packetId] || packetData.packetName;
+          const packetId = packetData.packetId !== undefined ? packetData.packetId : (packetData.CmdID !== undefined ? packetData.CmdID : packetData.CmdId);
+          const protoName = cmdIdToMessageMapRef.current[packetId] || packetData.packetName;
           const packetSource = (packetData.source?.toUpperCase() === 'CLIENT' ? 'CLIENT' : 'SERVER') as Packet['source'];
 
           if (packetData.binary && protoName) {
@@ -573,7 +574,7 @@ function App() {
           const newPacket: Packet = {
             timestamp,
             source: packetSource,
-            id: packetData.packetId,
+            id: packetId,
             packetName: protoName || 'Unknown',
             length: (() => {
               try {
@@ -823,7 +824,7 @@ function App() {
                 className="context-menu-item"
                 onClick={() => handleCopyId(contextMenu.packet)}
               >
-                Copy as CmdId
+                Copy as CmdID
               </div>
             </>
           )}
