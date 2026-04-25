@@ -114,6 +114,24 @@ export async function estimateDatabaseSize(name: string): Promise<number> {
   });
 }
 
+export async function estimateAllDatabaseSizes(names: string[]): Promise<{ sizes: Record<string, number | null>; total: number }> {
+  const sizes: Record<string, number | null> = {};
+  let total = 0;
+
+  await Promise.all(names.map(async (name) => {
+    try {
+      const size = await estimateDatabaseSize(name);
+      sizes[name] = size;
+      total += size;
+    } catch (err) {
+      console.warn(`Failed to estimate size for database '${name}':`, err);
+      sizes[name] = null;
+    }
+  }));
+
+  return { sizes, total };
+}
+
 /**
  * Save a batch of packets to IndexedDB.
  */

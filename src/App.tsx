@@ -26,7 +26,7 @@ import {
   getStorageEstimate,
   formatBytes,
   setDatabaseName,
-  estimateDatabaseSize,
+  estimateAllDatabaseSizes,
 } from './utils/packetStorage';
 import { buildGiSubPackets, decodeBase64ToBytes } from './utils/packetDecoding';
 
@@ -95,13 +95,18 @@ function App() {
 
   const refreshStorageStats = useCallback(async () => {
     try {
-      const { usage, quota } = await getStorageEstimate();
-      setStorageUsage(usage);
+      const [{ quota }, dbStats] = await Promise.all([
+        getStorageEstimate(),
+        estimateAllDatabaseSizes(databases.map((db) => db.name)),
+      ]);
+
+      setStorageUsage(dbStats.total);
+      setDatabaseSizes(dbStats.sizes);
       setStorageQuota(quota);
     } catch (err) {
-      console.warn('Failed to get storage estimate:', err);
+      console.warn('Failed to refresh storage stats:', err);
     }
-  }, []);
+  }, [databases]);
 
   useEffect(() => {
     const handleClick = () => {
@@ -187,28 +192,16 @@ function App() {
 
     let active = true;
     const loadDatabaseSizes = async () => {
-      const sizes: Record<string, number | null> = {};
-      await Promise.all(databases.map(async (db) => {
-        try {
-          sizes[db.name] = await estimateDatabaseSize(db.name);
-        } catch (err) {
-          console.warn(`Failed to estimate size for database '${db.name}':`, err);
-          sizes[db.name] = null;
-        }
-      }));
-
-      if (active) {
-        setDatabaseSizes(sizes);
-      }
+      await refreshStorageStats();
+      if (!active) return;
     };
 
-    setDatabaseSizes({});
     loadDatabaseSizes();
 
     return () => {
       active = false;
     };
-  }, [isDatabaseModalOpen, databases]);
+  }, [isDatabaseModalOpen, refreshStorageStats]);
 
   // Persist hiddenNames
   useEffect(() => {
