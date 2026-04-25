@@ -181,6 +181,7 @@ function App() {
 
   // Periodically refresh storage stats (every 5s)
   useEffect(() => {
+    refreshStorageStats();
     const interval = setInterval(refreshStorageStats, 5000);
     return () => clearInterval(interval);
   }, [refreshStorageStats]);
@@ -192,8 +193,9 @@ function App() {
 
     let active = true;
     const loadDatabaseSizes = async () => {
-      await refreshStorageStats();
+      const { sizes } = await estimateAllDatabaseSizes(databases.map((db) => db.name));
       if (!active) return;
+      setDatabaseSizes(sizes);
     };
 
     loadDatabaseSizes();
@@ -201,7 +203,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [isDatabaseModalOpen, refreshStorageStats]);
+  }, [isDatabaseModalOpen, databases]);
 
   // Persist hiddenNames
   useEffect(() => {
