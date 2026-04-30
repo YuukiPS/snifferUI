@@ -198,3 +198,66 @@
   background-color: #094771;
   color: #ffffff;
 }
+
+.save-prompt-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.save-prompt-card {
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 12px;
+  padding: 20px;
+  width: min(420px, calc(100% - 40px));
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.save-prompt-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.save-prompt-text {
+  color: #c0c0c0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.save-prompt-button,
+.save-prompt-cancel {
+  appearance: none;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.save-prompt-button {
+  background-color: #007acc;
+  color: #ffffff;
+}
+
+.save-prompt-button:hover {
+  background-color: #005a9e;
+}
+
+.save-prompt-cancel {
+  background-color: transparent;
+  color: #c0c0c0;
+}
+
+.save-prompt-cancel:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}

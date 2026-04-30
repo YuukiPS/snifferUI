@@ -97,6 +97,7 @@ function App() {
   // Storage stats state
   const [storageUsage, setStorageUsage] = useState(0);
   const [storageQuota, setStorageQuota] = useState(0);
+  const [isSavePromptOpen, setIsSavePromptOpen] = useState(false);
 
   const refreshStorageStats = useCallback(async () => {
     try {
@@ -705,9 +706,9 @@ function App() {
     return rebuildFromProto(protoText);
   };
 
-  const handleSave = async () => {
-    if (!packets.length) {
-      alert('No packets to save.');
+  const savePacketsToFile = async (packetsToSave: Packet[]) => {
+    if (!packetsToSave.length) {
+      alert('No packets to save for the selected option.');
       return;
     }
 
@@ -716,8 +717,8 @@ function App() {
 
     const writePacketStream = async (writable: any) => {
       await writable.write(encoder.encode('[\n'));
-      for (let i = 0; i < packets.length; i += 1) {
-        const packetJson = JSON.stringify(packets[i], null, 2);
+      for (let i = 0; i < packetsToSave.length; i += 1) {
+        const packetJson = JSON.stringify(packetsToSave[i], null, 2);
         const separator = i === 0 ? '' : ',\n';
         await writable.write(encoder.encode(separator + packetJson));
       }
@@ -748,8 +749,8 @@ function App() {
     const saveUsingBlob = async () => {
       const chunks: BlobPart[] = [];
       chunks.push('[\n');
-      for (let i = 0; i < packets.length; i += 1) {
-        const packetJson = JSON.stringify(packets[i], null, 2);
+      for (let i = 0; i < packetsToSave.length; i += 1) {
+        const packetJson = JSON.stringify(packetsToSave[i], null, 2);
         const separator = i === 0 ? '' : ',\n';
         chunks.push(separator + packetJson);
       }
@@ -775,6 +776,27 @@ function App() {
     } catch (err) {
       console.error('Save failed:', err);
       alert('Failed to save packets. Please try again or split the export into smaller files.');
+    }
+  };
+
+  const handleSave = () => {
+    if (!packets.length) {
+      alert('No packets to save.');
+      return;
+    }
+    setIsSavePromptOpen(true);
+  };
+
+  const handleSaveSelection = async (useFiltered: boolean) => {
+    setIsSavePromptOpen(false);
+    if (useFiltered) {
+      if (!filteredPackets.length) {
+        alert('There are no filtered packets to save.');
+        return;
+      }
+      await savePacketsToFile(filteredPackets);
+    } else {
+      await savePacketsToFile(packets);
     }
   };
 
@@ -909,6 +931,24 @@ function App() {
             <div className="database-loading-card">
               <div className="database-loading-spinner" />
               <div>{loadingMessage || 'Loading database...'}</div>
+            </div>
+          </div>
+        )}
+
+        {isSavePromptOpen && (
+          <div className="save-prompt-overlay" onClick={() => setIsSavePromptOpen(false)}>
+            <div className="save-prompt-card" onClick={(e) => e.stopPropagation()}>
+              <div className="save-prompt-title">Save packets</div>
+              <div className="save-prompt-text">Choose which data to save:</div>
+              <button className="save-prompt-button" onClick={() => handleSaveSelection(false)}>
+                Save all packets ({packets.length})
+              </button>
+              <button className="save-prompt-button" onClick={() => handleSaveSelection(true)}>
+                Save filtered packets ({filteredPackets.length})
+              </button>
+              <button className="save-prompt-cancel" onClick={() => setIsSavePromptOpen(false)}>
+                Cancel
+              </button>
             </div>
           </div>
         )}
