@@ -98,6 +98,32 @@ function App() {
   const [storageUsage, setStorageUsage] = useState(0);
   const [storageQuota, setStorageQuota] = useState(0);
   const [isSavePromptOpen, setIsSavePromptOpen] = useState(false);
+  const [saveFileName, setSaveFileName] = useState('');
+
+  const sanitizeFileComponent = useCallback((value: string) => {
+    const cleaned = value
+      .trim()
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    return cleaned || 'default';
+  }, []);
+
+  const buildDefaultSaveFileName = useCallback((databaseName: string) => {
+    const timestamp = Date.now();
+    const db = sanitizeFileComponent(databaseName);
+    return `packets_${timestamp}_${db}.json`;
+  }, [sanitizeFileComponent]);
+
+  const normalizeSaveFileName = useCallback((input: string, fallback: string) => {
+    let name = (input || '').trim();
+    if (!name) name = fallback;
+    name = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+    name = name.replace(/[. ]+$/g, '');
+    if (!name.toLowerCase().endsWith('.json')) name = `${name}.json`;
+    return name || fallback;
+  }, []);
 
   const refreshStorageStats = useCallback(async () => {
     try {
@@ -706,13 +732,13 @@ function App() {
     return rebuildFromProto(protoText);
   };
 
-  const savePacketsToFile = async (packetsToSave: Packet[]) => {
+  const savePacketsToFile = async (packetsToSave: Packet[], preferredFileName?: string) => {
     if (!packetsToSave.length) {
       alert('No packets to save for the selected option.');
       return;
     }
 
-    const fileName = `packets_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    const fileName = normalizeSaveFileName(preferredFileName || '', buildDefaultSaveFileName(currentDatabase));
     const encoder = new TextEncoder();
 
     const writePacketStream = async (writable: any) => {
@@ -784,19 +810,21 @@ function App() {
       alert('No packets to save.');
       return;
     }
+    setSaveFileName(buildDefaultSaveFileName(currentDatabase));
     setIsSavePromptOpen(true);
   };
 
   const handleSaveSelection = async (useFiltered: boolean) => {
     setIsSavePromptOpen(false);
+    const resolvedFileName = normalizeSaveFileName(saveFileName, buildDefaultSaveFileName(currentDatabase));
     if (useFiltered) {
       if (!filteredPackets.length) {
         alert('There are no filtered packets to save.');
         return;
       }
-      await savePacketsToFile(filteredPackets);
+      await savePacketsToFile(filteredPackets, resolvedFileName);
     } else {
-      await savePacketsToFile(packets);
+      await savePacketsToFile(packets, resolvedFileName);
     }
   };
 
@@ -940,6 +968,15 @@ function App() {
             <div className="save-prompt-card" onClick={(e) => e.stopPropagation()}>
               <div className="save-prompt-title">Save packets</div>
               <div className="save-prompt-text">Choose which data to save:</div>
+              <div className="save-prompt-row">
+                <div className="save-prompt-label">File name</div>
+                <input
+                  className="save-prompt-input"
+                  type="text"
+                  value={saveFileName}
+                  onChange={(e) => setSaveFileName(e.target.value)}
+                />
+              </div>
               <button className="save-prompt-button" onClick={() => handleSaveSelection(false)}>
                 Save all packets ({packets.length})
               </button>

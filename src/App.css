@@ -233,6 +233,34 @@
   line-height: 1.4;
 }
 
+.save-prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.save-prompt-label {
+  width: 90px;
+  color: #c0c0c0;
+  font-size: 0.85rem;
+}
+
+.save-prompt-input {
+  flex: 1;
+  background: #252526;
+  border: 1px solid #444;
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  outline: none;
+  font-family: var(--font-mono, monospace);
+}
+
+.save-prompt-input:focus {
+  border-color: #007acc;
+}
+
 .save-prompt-button,
 .save-prompt-cancel {
   appearance: none;
