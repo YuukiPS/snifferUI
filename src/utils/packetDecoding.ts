@@ -4,6 +4,33 @@ import { decodeUnknownProtobuf, base64ToBytes } from './unknownProtobuf';
 
 export const decodeBase64ToBytes = base64ToBytes;
 
+const stripVarintLengthDelimitedPrefix = (buf: Uint8Array): Uint8Array => {
+  let result = 0n;
+  let shift = 0n;
+  let i = 0;
+  for (let count = 0; count < 10; count++) {
+    if (i >= buf.length) throw new Error('Truncated varint');
+    const b = buf[i++];
+    result |= BigInt(b & 0x7f) << shift;
+    if ((b & 0x80) === 0) {
+      const lenNum = Number(result);
+      if (!Number.isFinite(lenNum) || lenNum < 0) throw new Error('Invalid length');
+      return buf.slice(i, i + lenNum);
+    }
+    shift += 7n;
+  }
+  throw new Error('Varint too long');
+};
+
+export const decodeUnknownProtobufJson = (buf: Uint8Array): { decoded: unknown; mode: 'message' | 'length_delimited' } => {
+  try {
+    return { decoded: decodeUnknownProtobuf(buf), mode: 'message' };
+  } catch {
+    const stripped = stripVarintLengthDelimitedPrefix(buf);
+    return { decoded: decodeUnknownProtobuf(stripped), mode: 'length_delimited' };
+  }
+};
+
 export const base64ByteLength = (b64?: string) => {
   if (!b64) return 0;
   try {

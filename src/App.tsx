@@ -29,7 +29,7 @@ import {
   setDatabaseName,
   estimateAllDatabaseSizes,
 } from './utils/packetStorage';
-import { buildGiSubPackets, decodeBase64ToBytes } from './utils/packetDecoding';
+import { buildGiSubPackets, decodeBase64ToBytes, decodeUnknownProtobufJson } from './utils/packetDecoding';
 
 function App() {
   const [packets, setPackets] = useState<Packet[]>([]);
@@ -616,6 +616,7 @@ function App() {
           let finalDataStr = "";
           let finalSource: 'BINARY' | 'JSON' = 'JSON';
           let decodedSuccess = false;
+          let protoDecodeFailed = false;
 
           const packetId = packetData.packetId !== undefined ? packetData.packetId : (packetData.CmdID !== undefined ? packetData.CmdID : packetData.CmdId);
           const protoName = cmdIdToMessageMapRef.current[packetId] || packetData.packetName;
@@ -632,6 +633,7 @@ function App() {
               decodedSuccess = true;
             } catch (error) {
               console.error("Proto decode failed:", error);
+              protoDecodeFailed = true;
             }
           }
 
@@ -644,8 +646,22 @@ function App() {
                 finalDataStr = JSON.stringify(packetData.data);
               }
               finalSource = 'JSON';
+            } else if (packetData.binary && protoDecodeFailed) {
+              try {
+                const buffer = decodeBase64ToBytes(packetData.binary);
+                const unknown = decodeUnknownProtobufJson(buffer);
+                finalDataStr = JSON.stringify({
+                  unknownDecoded: unknown.decoded,
+                  unknownDecodeMode: unknown.mode,
+                });
+                finalSource = 'BINARY';
+              } catch {
+                finalDataStr = JSON.stringify({ binaryBase64: packetData.binary });
+                finalSource = 'JSON';
+              }
             }
           }
+          if (!finalDataStr) finalDataStr = '{}';
 
           const timestamp = new Date(packetData.time || Date.now()).toLocaleTimeString();
 
