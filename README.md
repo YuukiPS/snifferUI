@@ -51,6 +51,10 @@ The application will be available at `http://localhost:5173`.
 - `npm run lint`: Runs ESLint to check for code quality issues.
 - `npm run preview`: Previews the production build locally.
 
+## Troubleshooting
+
+- `DOMException: The quota has been exceeded` during proto upload: this happens when the browser storage limit is reached. The app persists uploaded proto data in IndexedDB; if it still fails, clear site data for the dashboard origin and try again.
+
 ## 📂 Project Structure
 
 ```

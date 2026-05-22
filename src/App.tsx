@@ -28,6 +28,8 @@ import {
   formatBytes,
   setDatabaseName,
   estimateAllDatabaseSizes,
+  loadProtoTextForDatabase,
+  saveProtoTextForDatabase,
 } from './utils/packetStorage';
 import { buildGiSubPackets, decodeBase64ToBytes, decodeUnknownProtobufJson } from './utils/packetDecoding';
 
@@ -188,12 +190,23 @@ function App() {
         await refreshStorageStats();
 
         // 3. Load proto for this DB
-        const protoKey = currentDatabase === 'default' ? 'protoFileContent' : `protoFileContent_${currentDatabase}`;
-        const savedProto = localStorage.getItem(protoKey);
+        const savedProto = await loadProtoTextForDatabase(currentDatabase);
         if (savedProto) {
           console.log("Found saved proto file. Rebuilding proto...");
-          // Pass storedPackets to ensure we re-decode the newly loaded packets with the proto map
           rebuildFromProto(savedProto, storedPackets);
+        } else {
+          const legacyProtoKey = currentDatabase === 'default' ? 'protoFileContent' : `protoFileContent_${currentDatabase}`;
+          const legacyProto = localStorage.getItem(legacyProtoKey);
+          if (legacyProto) {
+            console.log("Found legacy saved proto file. Rebuilding proto...");
+            rebuildFromProto(legacyProto, storedPackets);
+            try {
+              await saveProtoTextForDatabase(currentDatabase, legacyProto);
+              localStorage.removeItem(legacyProtoKey);
+            } catch (err) {
+              console.warn('Failed to migrate proto from localStorage to IndexedDB:', err);
+            }
+          }
         }
 
         // 4. Check server status (only on initial load effectively, or if connection lost)
@@ -743,9 +756,20 @@ function App() {
   };
 
   const handleProtoUpload = (protoText: string): { success: boolean; mappingCount: number; error?: string } => {
-    const protoKey = currentDatabase === 'default' ? 'protoFileContent' : `protoFileContent_${currentDatabase}`;
-    localStorage.setItem(protoKey, protoText);
-    return rebuildFromProto(protoText);
+    const rebuildResult = rebuildFromProto(protoText);
+    if (rebuildResult.success) {
+      void (async () => {
+        try {
+          await saveProtoTextForDatabase(currentDatabase, protoText);
+          const legacyProtoKey = currentDatabase === 'default' ? 'protoFileContent' : `protoFileContent_${currentDatabase}`;
+          localStorage.removeItem(legacyProtoKey);
+        } catch (err) {
+          console.error('Failed to persist proto file:', err);
+          alert('Proto loaded, but could not be saved to browser storage. It will be lost on refresh.');
+        }
+      })();
+    }
+    return rebuildResult;
   };
 
   const savePacketsToFile = async (packetsToSave: Packet[], preferredFileName?: string) => {

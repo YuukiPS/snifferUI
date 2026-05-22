@@ -3,8 +3,10 @@ import type { Packet } from '../types';
 const DEFAULT_DB_NAME = 'packet_monitor_db';
 let currentDbName = DEFAULT_DB_NAME;
 
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'packets';
+const PROTO_STORE_NAME = 'proto';
+const PROTO_KEY = 'protoFileContent';
 
 let dbInstance: IDBDatabase | null = null;
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -31,6 +33,9 @@ function openDB(): Promise<IDBDatabase> {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'index' });
+      }
+      if (!db.objectStoreNames.contains(PROTO_STORE_NAME)) {
+        db.createObjectStore(PROTO_STORE_NAME, { keyPath: 'key' });
       }
     };
 
@@ -61,6 +66,9 @@ function openDBByName(name: string): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'index' });
       }
+      if (!db.objectStoreNames.contains(PROTO_STORE_NAME)) {
+        db.createObjectStore(PROTO_STORE_NAME, { keyPath: 'key' });
+      }
     };
 
     request.onsuccess = () => {
@@ -75,15 +83,16 @@ function openDBByName(name: string): Promise<IDBDatabase> {
 
 export async function estimateDatabaseSize(name: string): Promise<number> {
   const db = await openDBByName(name);
-  const tx = db.transaction(STORE_NAME, 'readonly');
-  const store = tx.objectStore(STORE_NAME);
-  const request = store.openCursor();
   let bytes = 0;
   const encoder = new TextEncoder();
 
   return new Promise((resolve, reject) => {
-    request.onsuccess = () => {
-      const cursor = request.result;
+    const txPackets = db.transaction(STORE_NAME, 'readonly');
+    const packetsStore = txPackets.objectStore(STORE_NAME);
+    const packetsRequest = packetsStore.openCursor();
+
+    packetsRequest.onsuccess = () => {
+      const cursor = packetsRequest.result;
       if (!cursor) {
         return;
       }
@@ -98,18 +107,51 @@ export async function estimateDatabaseSize(name: string): Promise<number> {
       cursor.continue();
     };
 
-    request.onerror = () => {
-      reject(request.error);
+    packetsRequest.onerror = () => {
+      db.close();
+      reject(packetsRequest.error);
     };
 
-    tx.oncomplete = () => {
-      db.close();
-      resolve(bytes);
+    txPackets.oncomplete = () => {
+      const txProto = db.transaction(PROTO_STORE_NAME, 'readonly');
+      const protoStore = txProto.objectStore(PROTO_STORE_NAME);
+      const protoRequest = protoStore.openCursor();
+
+      protoRequest.onsuccess = () => {
+        const cursor = protoRequest.result;
+        if (!cursor) {
+          return;
+        }
+
+        try {
+          const payload = JSON.stringify(cursor.value);
+          bytes += encoder.encode(payload).length;
+        } catch (err) {
+          console.warn('Failed to stringify proto for size estimate:', err);
+        }
+
+        cursor.continue();
+      };
+
+      protoRequest.onerror = () => {
+        db.close();
+        reject(protoRequest.error);
+      };
+
+      txProto.oncomplete = () => {
+        db.close();
+        resolve(bytes);
+      };
+
+      txProto.onerror = () => {
+        db.close();
+        reject(txProto.error);
+      };
     };
 
-    tx.onerror = () => {
+    txPackets.onerror = () => {
       db.close();
-      reject(tx.error);
+      reject(txPackets.error);
     };
   });
 }
@@ -240,6 +282,62 @@ export async function getStorageEstimate(): Promise<{ usage: number; quota: numb
     };
   }
   return { usage: 0, quota: 0 };
+}
+
+export async function saveProtoTextForDatabase(name: string, protoText: string): Promise<void> {
+  const db = await openDBByName(name);
+  const tx = db.transaction(PROTO_STORE_NAME, 'readwrite');
+  const store = tx.objectStore(PROTO_STORE_NAME);
+  store.put({ key: PROTO_KEY, text: protoText, updatedAt: Date.now() });
+
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
+}
+
+export async function loadProtoTextForDatabase(name: string): Promise<string | null> {
+  const db = await openDBByName(name);
+  const tx = db.transaction(PROTO_STORE_NAME, 'readonly');
+  const store = tx.objectStore(PROTO_STORE_NAME);
+  const request = store.get(PROTO_KEY);
+
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => {
+      const value = request.result as { text?: string } | undefined;
+      resolve(value?.text ?? null);
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
+}
+
+export async function clearProtoTextForDatabase(name: string): Promise<void> {
+  const db = await openDBByName(name);
+  const tx = db.transaction(PROTO_STORE_NAME, 'readwrite');
+  const store = tx.objectStore(PROTO_STORE_NAME);
+  store.delete(PROTO_KEY);
+
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
 }
 
 /**
