@@ -516,14 +516,52 @@ function App() {
     });
   };
 
-  const handleCopyJson = (packet: Packet, pretty: boolean = true) => {
+  const getProtobufDecodedJson = (packet: Packet): string | null => {
+    if (!packet.binary) return null;
     try {
-      const parsed = JSON.parse(packet.data);
-      const formatted = pretty ? JSON.stringify(parsed, null, 2) : JSON.stringify(parsed);
+      const buffer = decodeBase64ToBytes(packet.binary);
+      const unknown = decodeUnknownProtobufJson(buffer);
+      return JSON.stringify({
+        unknownDecoded: unknown.decoded,
+        unknownDecodeMode: unknown.mode,
+      }, null, 2);
+    } catch {
+      return null;
+    }
+  };
+
+  const handleCopyJson = (packet: Packet, pretty: boolean = true) => {
+    // Try proto class JSON first
+    if (packet.data && packet.data !== '{}') {
+      try {
+        const parsed = JSON.parse(packet.data);
+        const formatted = pretty ? JSON.stringify(parsed, null, 2) : JSON.stringify(parsed);
+        navigator.clipboard.writeText(formatted);
+        setContextMenu(null);
+        return;
+      } catch (e) {
+        console.error("Failed to parse JSON", e);
+      }
+    }
+    // Fallback: try to decode raw protobuf into JSON
+    const protobufJson = getProtobufDecodedJson(packet);
+    if (protobufJson) {
+      const formatted = pretty ? protobufJson : JSON.stringify(JSON.parse(protobufJson));
       navigator.clipboard.writeText(formatted);
-    } catch (e) {
-      console.error("Failed to parse JSON", e);
-      navigator.clipboard.writeText(packet.data);
+    } else {
+      // Last resort: copy raw data string
+      navigator.clipboard.writeText(packet.data || '{}');
+    }
+    setContextMenu(null);
+  };
+
+  const handleCopyProtobuf = (packet: Packet, pretty: boolean = true) => {
+    const protobufJson = getProtobufDecodedJson(packet);
+    if (protobufJson) {
+      const formatted = pretty ? protobufJson : JSON.stringify(JSON.parse(protobufJson));
+      navigator.clipboard.writeText(formatted);
+    } else {
+      alert("No protobuf binary data available for this packet.");
     }
     setContextMenu(null);
   };
@@ -1083,6 +1121,12 @@ function App() {
               </div>
               <div className="context-menu-item" onClick={() => handleCopyJson(contextMenu.packet, false)}>
                 Copy as Json (Min)
+              </div>
+              <div className="context-menu-item" onClick={() => handleCopyProtobuf(contextMenu.packet, true)}>
+                Copy as Protobuf (Pretty)
+              </div>
+              <div className="context-menu-item" onClick={() => handleCopyProtobuf(contextMenu.packet, false)}>
+                Copy as Protobuf (Min)
               </div>
               <div className="context-menu-item" onClick={() => handleCopyBinary(contextMenu.packet)}>
                 Copy as Binary (Base64)

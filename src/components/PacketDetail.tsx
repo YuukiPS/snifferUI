@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { Packet } from '../types';
 import './PacketDetail.css';
 import { UnknownProtobufDecoder } from './UnknownProtobufDecoder';
+import { decodeUnknownProtobufJson, decodeBase64ToBytes } from '../utils/packetDecoding';
 
 interface PacketDetailProps {
     packet: Packet | null;
@@ -567,14 +568,133 @@ export const PacketDetail: React.FC<PacketDetailProps> = ({ packet }) => {
     const [matches, setMatches] = useState<SearchMatch[]>([]);
     const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
-    const parsedData = useMemo(() => {
-        if (!packet) return null;
+    // Compute fallback protobuf decoded data for when proto class JSON is missing
+    const protobufFallback = useMemo(() => {
+        if (!packet || !packet.binary) return null;
         try {
-            return JSON.parse(packet.data);
-        } catch (e) {
+            const buffer = decodeBase64ToBytes(packet.binary);
+            const unknown = decodeUnknownProtobufJson(buffer);
+            return {
+                unknownDecoded: unknown.decoded,
+                unknownDecodeMode: unknown.mode,
+            };
+        } catch {
             return null;
         }
     }, [packet]);
+
+    const parsedData = useMemo(() => {
+        if (!packet) return null;
+        // Try proto class JSON first
+        if (packet.data && packet.data !== '{}') {
+            try {
+                return JSON.parse(packet.data);
+            } catch (e) {
+                // Fall through to protobuf fallback
+            }
+        }
+        // Fallback to raw protobuf decoded data
+        return protobufFallback;
+    }, [packet, protobufFallback]);
+
+    // Compare proto JSON vs raw protobuf decoded data to detect truly missing fields.
+    // For each matching array pair (matched by length), compare per-object field counts.
+    // If raw protobuf has MORE fields than proto JSON keys at the same level,
+    // some fields exist in binary but were dropped during proto deserialization.
+    const missingFieldInfo = useMemo(() => {
+        if (!packet || !protobufFallback) return null;
+        // Only relevant when we have both proto JSON and raw protobuf
+        let protoParsed: any = null;
+        try {
+            protoParsed = JSON.parse(packet.data);
+        } catch {}
+        if (!protoParsed) return null;
+
+        const rawDecoded = protobufFallback as any;
+        const rawTopArray = rawDecoded?.unknownDecoded;
+        if (!Array.isArray(rawTopArray)) return null;
+
+        // Collect per-nesting-level comparisons
+        interface LevelComparison {
+            protoKey: string;
+            rawFieldCount: number;    // total field numbers in raw protobuf at this level
+            protoFieldCount: number;  // total keys in proto JSON at this level
+            diff: number;              // positive = raw has more (missing), negative = proto has more (defaults)
+            itemCount: number;
+        }
+        const comparisons: LevelComparison[] = [];
+
+        // Helper: for a raw protobuf "message" node, count its nested fields
+        const countRawFields = (node: any): number => {
+            if (Array.isArray(node?.nested)) return node.nested.length;
+            return 0;
+        };
+
+        // Helper: count keys in a proto JSON object (including nested)
+        const countProtoKeys = (node: any): number => {
+            if (node && typeof node === 'object' && !Array.isArray(node)) {
+                return Object.keys(node).length;
+            }
+            return 0;
+        };
+
+        // Compare top-level: find proto JSON arrays matching rawDecoded.unknownDecoded length
+        const rawItems = rawTopArray.length;
+        const protoKeys = Object.keys(protoParsed);
+
+        for (const key of protoKeys) {
+            const protoVal = protoParsed[key];
+            if (!Array.isArray(protoVal)) continue;
+            if (protoVal.length !== rawItems) continue;
+
+            // Matched array pair at top level — compare per-item fields
+            let rawTotal = 0;
+            let protoTotal = 0;
+            let comparableItems = 0;
+            const minLen = Math.min(rawTopArray.length, protoVal.length);
+
+            for (let i = 0; i < minLen; i++) {
+                const rf = countRawFields(rawTopArray[i]);
+                const pf = countProtoKeys(protoVal[i]);
+                if (rf > 0 || pf > 0) {
+                    rawTotal += rf;
+                    protoTotal += pf;
+                    comparableItems++;
+                }
+            }
+
+            if (comparableItems > 0 && rawTotal > protoTotal) {
+                comparisons.push({
+                    protoKey: key,
+                    rawFieldCount: rawTotal,
+                    protoFieldCount: protoTotal,
+                    diff: rawTotal - protoTotal,
+                    itemCount: comparableItems,
+                });
+            }
+        }
+
+        if (comparisons.length > 0) {
+            return {
+                totalDiff: comparisons.reduce((s, c) => s + c.diff, 0),
+                comparisons,
+            };
+        }
+        return null;
+    }, [packet, protobufFallback]);
+
+    // Whether the current data source is protobuf fallback (not proto class JSON)
+    const isProtobufFallback = useMemo(() => {
+        if (!packet) return false;
+        let hasProtoJson = false;
+        try {
+            if (packet.data && packet.data !== '{}') {
+                JSON.parse(packet.data);
+                hasProtoJson = true;
+            }
+        } catch {}
+        return !hasProtoJson && protobufFallback !== null;
+    }, [packet, protobufFallback]);
 
     useEffect(() => {
         setCurrentMatchIndex(0);
@@ -618,7 +738,7 @@ export const PacketDetail: React.FC<PacketDetailProps> = ({ packet }) => {
                     <button
                         className={`toolbar-btn ${viewMode === 'table' ? 'active' : ''}`}
                         onClick={() => setViewMode('table')}
-                        disabled={!parsedData}
+                        disabled={!parsedData && !protobufFallback}
                     >
                         table
                     </button>
@@ -685,10 +805,62 @@ export const PacketDetail: React.FC<PacketDetailProps> = ({ packet }) => {
                     <span className="label">Source:</span> {packet.dataSource || 'JSON'}
                 </div>
 
+                {isProtobufFallback && (
+                    <div className="warning-banner" style={{
+                        background: 'rgba(234, 179, 8, 0.12)',
+                        border: '1px solid rgba(234, 179, 8, 0.3)',
+                        borderRadius: 6,
+                        padding: '8px 14px',
+                        margin: '0 0 10px 0',
+                        color: '#fbbf24',
+                        fontSize: 12,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                    }}>
+                        <span style={{ fontWeight: 600 }}>&#9888;</span>
+                        <span>No proto class available. Data decoded from <strong>raw protobuf</strong> (field numbers only, not original proto JSON).</span>
+                    </div>
+                )}
+
+                {missingFieldInfo && (
+                    <div className="warning-banner" style={{
+                        background: 'rgba(59, 130, 246, 0.12)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: 6,
+                        padding: '8px 14px',
+                        margin: '0 0 10px 0',
+                        color: '#60a5fa',
+                        fontSize: 12,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontWeight: 600 }}>&#8505;</span>
+                            <span>
+                                Raw protobuf has <strong>{missingFieldInfo.totalDiff} more field(s)</strong> than proto JSON.
+                                Some fields exist in binary data but were dropped during proto deserialization.
+                            </span>
+                        </div>
+                        {missingFieldInfo.comparisons.map((c: any) => (
+                            <div key={c.protoKey} style={{
+                                paddingLeft: 24,
+                                fontFamily: 'monospace',
+                                fontSize: 11,
+                                opacity: 0.85,
+                            }}>
+                                <strong>{c.protoKey}</strong>: raw {c.rawFieldCount} fields / proto {c.protoFieldCount} keys
+                                across {c.itemCount} items (diff: +{c.diff})
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 <div className="view-container">
                     {viewMode === 'text' && (
                         <JsonTextView
-                            data={packet.data}
+                            data={packet.data && packet.data !== '{}' ? packet.data : JSON.stringify(protobufFallback || {}, null, 2)}
                             searchTerm={searchTerm}
                             onMatchesFound={setMatches}
                             focusedMatchIndex={currentMatchIndex}
