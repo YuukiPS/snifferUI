@@ -7,7 +7,7 @@ import './PacketTable.css';
 interface PacketTableProps {
     packets: Packet[];
     selectedPacket: Packet | null;
-    onSelectPacket: (packet: Packet) => void;
+    onSelectPacket: (packet: Packet | null) => void;
     onRowContextMenu: (event: React.MouseEvent, packet: Packet, type: 'name' | 'data') => void;
     autoScroll?: boolean;
     searchTerm?: string;
@@ -200,7 +200,12 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                 return next;
             });
         }
-        onSelectPacket(row.packet);
+        // Toggle selection: clicking the already-selected row deselects it (closes details)
+        if (selectedPacket === row.packet) {
+            onSelectPacket(null);
+        } else {
+            onSelectPacket(row.packet);
+        }
     };
 
     const handleSort = (key: SortKey) => {

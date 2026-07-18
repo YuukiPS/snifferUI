@@ -563,7 +563,7 @@ const JsonTableView = ({ data }: { data: any }) => {
 
 // --- PacketDetail Main ---
 
-export const PacketDetail: React.FC<PacketDetailProps> = ({ packet }) => {
+export const PacketDetail: React.FC<PacketDetailProps> = ({ packet, onClose }) => {
     const [viewMode, setViewMode] = useState<ViewMode>('text');
     const [searchTerm, setSearchTerm] = useState('');
     const [matches, setMatches] = useState<SearchMatch[]>([]);
@@ -712,17 +712,25 @@ export const PacketDetail: React.FC<PacketDetailProps> = ({ packet }) => {
     };
 
     if (!packet) {
-        return (
-            <div className="packet-detail empty">
-                <div className="empty-message">Select a packet to view details</div>
-            </div>
-        );
+        return null;
     }
 
     return (
         <div className="packet-detail">
             <div className="detail-header">
-                <div className="detail-title">{packet.packetName}</div>
+                <div className="detail-title-row">
+                    <div className="detail-title">{packet.packetName}</div>
+                    {onClose && (
+                        <button
+                            className="detail-close-btn"
+                            onClick={onClose}
+                            title="Close packet details"
+                            aria-label="Close packet details"
+                        >
+                            ×
+                        </button>
+                    )}
+                </div>
                 <div className="detail-toolbar">
                     <button
                         className={`toolbar-btn ${viewMode === 'text' ? 'active' : ''}`}

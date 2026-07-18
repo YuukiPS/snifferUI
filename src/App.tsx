@@ -1091,20 +1091,24 @@ function App() {
         )}
       </div>
 
-      <div
-        className="resizer"
-        onMouseDown={() => setIsResizing(true)}
-        style={{
-          width: '4px',
-          cursor: 'col-resize',
-          backgroundColor: isResizing ? '#007acc' : 'transparent',
-          zIndex: 10
-        }}
-      />
+      {selectedPacket && (
+        <>
+          <div
+            className="resizer"
+            onMouseDown={() => setIsResizing(true)}
+            style={{
+              width: '4px',
+              cursor: 'col-resize',
+              backgroundColor: isResizing ? '#007acc' : 'transparent',
+              zIndex: 10
+            }}
+          />
 
-      <div style={{ width: packetDetailWidth, minWidth: '300px', display: 'flex', flexDirection: 'column' }}>
-        <PacketDetail packet={selectedPacket} />
-      </div>
+          <div style={{ width: packetDetailWidth, minWidth: '300px', display: 'flex', flexDirection: 'column' }}>
+            <PacketDetail packet={selectedPacket} onClose={() => setSelectedPacket(null)} />
+          </div>
+        </>
+      )}
 
       {contextMenu && (
         <div
