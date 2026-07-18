@@ -17,6 +17,7 @@ import { JsonUploadModal } from './components/JsonUploadModal';
 import { PcapUploadModal } from './components/PcapUploadModal';
 import { DatabaseModal } from './components/DatabaseModal';
 import type { Packet } from './types';
+import { normalizeTimestamp } from './types';
 import {
   savePackets,
   loadAllPackets,
@@ -171,16 +172,37 @@ function App() {
         setCmdIdToMessageMap({});
         protoRootRef.current = new protobuf.Root();
 
-        // 1. Restore persisted packets
+        // 1. Restore persisted packets (normalize any legacy string timestamps)
         let storedPackets: Packet[] = [];
         try {
           const stored = await loadAllPackets();
           if (stored.length > 0) {
-            storedPackets = stored;
-            setPackets(stored);
-            const maxIndex = stored.reduce((max, p) => Math.max(max, p.index), 0);
+            let letNeedsPersist = false;
+            storedPackets = stored.map(p => {
+              const norm = normalizeTimestamp((p as any).timestamp);
+              if (norm !== p.timestamp) {
+                letNeedsPersist = true;
+                return { ...p, timestamp: norm };
+              }
+              return p;
+            });
+            // Also walk sub-packets
+            const normalizeSubs = (pkt: Packet): Packet => {
+              if (!pkt.subPackets) return pkt;
+              return {
+                ...pkt,
+                subPackets: pkt.subPackets.map(s => normalizeSubs({ ...s, timestamp: normalizeTimestamp((s as any).timestamp) })),
+              };
+            };
+            storedPackets = storedPackets.map(normalizeSubs);
+            setPackets(storedPackets);
+            const maxIndex = storedPackets.reduce((max, p) => Math.max(max, p.index), 0);
             globalPacketIndexRef.current = maxIndex + 1;
-            console.log(`Restored ${stored.length} packets from IndexedDB (next index: ${globalPacketIndexRef.current})`);
+            console.log(`Restored ${storedPackets.length} packets from IndexedDB (next index: ${globalPacketIndexRef.current})`);
+            if (letNeedsPersist) {
+              console.log('Migrating legacy string timestamps to Unix ms...');
+              clearAllPackets().then(() => savePackets(storedPackets)).then(refreshStorageStats);
+            }
           }
         } catch (err) {
           console.warn('Failed to load packets from IndexedDB:', err);
@@ -404,7 +426,7 @@ function App() {
           dataSource = 'JSON';
         }
 
-        const timestamp = item.timestamp || (item.time ? new Date(item.time).toLocaleTimeString() : new Date().toLocaleTimeString());
+        const timestamp = normalizeTimestamp(item.timestamp ?? item.time);
 
         const pkt: Packet = {
           timestamp,
@@ -714,7 +736,7 @@ function App() {
           }
           if (!finalDataStr) finalDataStr = '{}';
 
-          const timestamp = new Date(packetData.time || Date.now()).toLocaleTimeString();
+          const timestamp = packetData.time > 0 && Number.isFinite(packetData.time) ? packetData.time : Date.now();
 
           const newPacket: Packet = {
             timestamp,

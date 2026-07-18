@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Packet } from '../types';
+import { formatTime } from '../types';
 import './PacketTable.css';
 
 interface PacketTableProps {
@@ -282,7 +283,7 @@ export const PacketTable = forwardRef<PacketTableRef, PacketTableProps>(({ packe
                                 onClick={() => handleRowClick(row)}
                             >
                                 <div className="virtual-cell font-mono text-sm" style={{ width: '140px' }}>
-                                    {packet.timestamp}
+                                    {formatTime(packet.timestamp)}
                                 </div>
                                 <div className="virtual-cell text-right text-sm" style={{ width: '60px' }}>
                                     {displayIndex}

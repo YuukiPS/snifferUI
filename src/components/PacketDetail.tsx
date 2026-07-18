@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { Packet } from '../types';
+import { formatTime } from '../types';
 import './PacketDetail.css';
 import { UnknownProtobufDecoder } from './UnknownProtobufDecoder';
 import { decodeUnknownProtobufJson, decodeBase64ToBytes } from '../utils/packetDecoding';
@@ -799,7 +800,7 @@ export const PacketDetail: React.FC<PacketDetailProps> = ({ packet }) => {
 
             <div className="detail-content">
                 <div className="meta-info">
-                    <span className="label">Time:</span> {packet.timestamp} <span className="sep">|</span>
+                    <span className="label">Time:</span> {formatTime(packet.timestamp)} <span className="sep">|</span>
                     <span className="label">ID:</span> {packet.id} <span className="sep">|</span>
                     <span className="label">Length:</span> {packet.length} <span className="sep">|</span>
                     <span className="label">Source:</span> {packet.dataSource || 'JSON'}

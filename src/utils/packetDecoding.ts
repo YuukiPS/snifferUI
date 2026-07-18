@@ -86,7 +86,7 @@ export const buildGiSubPackets = ({
   decodedObj: any;
   cmdIdToMessageMap: Record<number, string>;
   protoRoot: Root;
-  timestamp: string;
+  timestamp: number;
   createIndex: (i: number) => number;
  }): Packet[] | undefined => {
   const attachNestedSubPackets = (pkt: Packet) => {
